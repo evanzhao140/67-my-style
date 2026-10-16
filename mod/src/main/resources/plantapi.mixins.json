@@ -9,6 +9,11 @@
 		"ItemStackMixin",
 		"ServerPlayerGameModeMixin"
 	],
+	"client": [
+		"client.MultiPlayerGameModeMixin",
+		"client.ClientPacketListenerMixin",
+		"client.AdvancementToastMixin"
+	],
 	"injectors": {
 		"defaultRequire": 1
 	}

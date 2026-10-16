@@ -27,5 +27,6 @@ public class PlantApiClient implements ClientModInitializer {
 			}
 		});
 		PlantHud.register();
+		PlantClientDirector.register();
 	}
 }
