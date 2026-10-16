@@ -1,0 +1,148 @@
+import SwiftUI
+
+struct ContentView: View {
+    @EnvironmentObject var model: AppModel
+
+    var body: some View {
+        VStack(spacing: 16) {
+            statusHeader
+
+            if model.locked {
+                lockedPanel
+            } else {
+                connectSection
+                lockButton
+            }
+
+            Spacer(minLength: 0)
+            footer
+        }
+        .padding(20)
+        .background(Color.black.ignoresSafeArea())
+        .preferredColorScheme(.dark)
+    }
+
+    private var statusHeader: some View {
+        VStack(spacing: 8) {
+            Text("MCVibe")
+                .font(.largeTitle.bold())
+
+            Text(model.statusText)
+                .font(.footnote.weight(.semibold))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(statusColor.opacity(0.25), in: Capsule())
+                .foregroundStyle(statusColor)
+        }
+    }
+
+    private var statusColor: Color {
+        switch model.phase {
+        case .connected: return .green
+        case .connecting: return .orange
+        case .idle: return .gray
+        }
+    }
+
+    @ViewBuilder
+    private var connectSection: some View {
+        if model.phase == .connected {
+            Button("Disconnect") { model.disconnect() }
+                .buttonStyle(.bordered)
+        } else {
+            VStack(spacing: 12) {
+                if model.hosts.isEmpty {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text("Looking for your PC on Wi‑Fi…")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    Text("Start Minecraft with the MCVibe mod, and keep your phone and PC on the same Wi‑Fi.")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .multilineTextAlignment(.center)
+                } else {
+                    ForEach(model.hosts) { host in
+                        Button {
+                            model.connect(host: host.host, port: host.port)
+                        } label: {
+                            HStack {
+                                Text("🖥️ \(host.name)")
+                                Spacer()
+                                Text("\(host.host) • MC \(host.mc)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                }
+
+                HStack(spacing: 8) {
+                    TextField("or type PC IP, e.g. 192.168.1.20", text: $model.manualInput)
+                        .textFieldStyle(.roundedBorder)
+                        .keyboardType(.numbersAndPunctuation)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                    Button("Connect") { model.connectManual() }
+                        .buttonStyle(.bordered)
+                        .disabled(model.manualInput.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+        }
+    }
+
+    private var lockButton: some View {
+        Button {
+            model.toggleLock()
+        } label: {
+            VStack(spacing: 6) {
+                Image(systemName: "lock.open.fill")
+                    .font(.system(size: 32))
+                Text("Lock controls")
+                    .font(.headline)
+                Text("Prevents accidental taps while playing")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.7))
+            }
+            .frame(maxWidth: .infinity, minHeight: 110)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(.blue)
+    }
+
+    private var lockedPanel: some View {
+        Button {
+            model.toggleLock()
+        } label: {
+            VStack(spacing: 10) {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 44))
+                Text("LOCKED")
+                    .font(.system(size: 30, weight: .heavy, design: .rounded))
+                Text("Tap to unlock")
+                    .font(.footnote)
+                    .opacity(0.8)
+            }
+            .frame(maxWidth: .infinity, minHeight: 240)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(.red)
+    }
+
+    @ViewBuilder
+    private var footer: some View {
+        VStack(spacing: 6) {
+            if !model.lastEvent.isEmpty {
+                Text(model.lastEvent)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+            }
+            Text("Keep this app in the foreground while playing — iOS pauses apps in the background, which stops the vibrations.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
+        }
+    }
+}
