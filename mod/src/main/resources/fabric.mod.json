@@ -1,0 +1,33 @@
+{
+	"schemaVersion": 1,
+	"id": "plantapi",
+	"version": "${version}",
+	"name": "Plant API",
+	"description": "Small generic helper API for Fabric mods. Provides a lightweight local helper service and utility hooks.",
+	"authors": [
+		"you"
+	],
+	"license": "MIT",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.plantapi.PlantApiMod"
+		],
+		"modmenu": [
+			"com.plantapi.PlantMenu"
+		]
+	},
+	"mixins": [
+		"plantapi.mixins.json"
+	],
+	"depends": {
+		"fabricloader": ">=0.19.5",
+		"minecraft": "~26.2",
+		"java": ">=25",
+		"fabric-api": "*"
+	},
+	"recommends": {
+		"modmenu": "*",
+		"cloth-config": "*"
+	}
+}

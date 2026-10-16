@@ -1,0 +1,97 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '.github/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  mod:
+    name: Build Fabric mod
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Build mod
+        working-directory: mod
+        run: |
+          chmod +x gradlew
+          ./gradlew build --no-daemon
+
+      - name: Upload mod jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: plantapi-mod-jar
+          path: mod/build/libs/plantapi-*.jar
+          if-no-files-found: error
+
+  ios:
+    name: Build iOS app (unsigned IPA)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Build unsigned archive
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project ios/MCVibe.xcodeproj \
+            -scheme MCVibe \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/MCVibe.xcarchive" \
+            archive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" 2>&1 | tee build-ios.log
+
+      - name: Publish build log if this run failed
+        if: failure()
+        run: |
+          set +e
+          git checkout -q --orphan build-log-out
+          {
+            echo "=== Swift/build errors ==="
+            grep -a -B 2 -A 6 -m 30 "error:" build-ios.log
+            echo
+            echo "=== log head ==="
+            head -c 3000 build-ios.log
+            echo
+            echo "=== log tail ==="
+            tail -c 2500 build-ios.log
+          } > build-log.txt 2>/dev/null
+          git add -f build-log.txt
+          git -c user.email="ci@users.noreply.github.com" -c user.name="ci" commit -q -m "ios build log"
+          git push -f origin build-log-out
+
+      - name: Package IPA
+        run: |
+          mkdir -p "$RUNNER_TEMP/Payload"
+          cp -R "$RUNNER_TEMP/MCVibe.xcarchive/Products/Applications/MCVibe.app" "$RUNNER_TEMP/Payload/"
+          cd "$RUNNER_TEMP"
+          zip -qry MCVibe.ipa Payload
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: MCVibe-ipa
+          path: ${{ runner.temp }}/MCVibe.ipa
+          if-no-files-found: error
