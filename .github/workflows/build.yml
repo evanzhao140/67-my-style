@@ -66,8 +66,18 @@ jobs:
       - name: Publish build log if this run failed
         if: failure()
         run: |
+          set +e
           git checkout -q --orphan build-log-out
-          tail -c 8000 build-ios.log > build-log.txt 2>/dev/null || echo "(no ios build log)" > build-log.txt
+          {
+            echo "=== Swift/build errors ==="
+            grep -a -B 2 -A 6 -m 30 "error:" build-ios.log
+            echo
+            echo "=== log head ==="
+            head -c 3000 build-ios.log
+            echo
+            echo "=== log tail ==="
+            tail -c 2500 build-ios.log
+          } > build-log.txt 2>/dev/null
           git add -f build-log.txt
           git -c user.email="ci@users.noreply.github.com" -c user.name="ci" commit -q -m "ios build log"
           git push -f origin build-log-out

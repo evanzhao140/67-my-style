@@ -43,11 +43,12 @@ jobs:
             git checkout -q "$SHA" || { echo "checkout failed" >> "$OUT"; continue; }
             (cd ios && xcodegen generate >/dev/null 2>&1) || echo "xcodegen failed" >> "$OUT"
             if xcodebuild -project ios/MCVibe.xcodeproj -scheme MCVibe -configuration Release \
-                 -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/dd" \
+                 -destination 'generic/platform=iOS' \
+                 -archivePath "$RUNNER_TEMP/MCVibe.xcarchive" \
                  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
                  STRIP_INSTALLED_PRODUCT=NO DEPLOYMENT_POSTPROCESSING=NO \
-                 build > "$RUNNER_TEMP/build.log" 2>&1; then
-              BIN="$RUNNER_TEMP/dd/Build/Products/Release-iphoneos/MCVibe.app/MCVibe"
+                 archive > "$RUNNER_TEMP/build.log" 2>&1; then
+              BIN="$RUNNER_TEMP/MCVibe.xcarchive/Products/Applications/MCVibe.app/MCVibe"
               echo "binary uuid: $(dwarfdump --uuid "$BIN" | awk '{print $2}')" >> "$OUT"
               echo "-- atos --" >> "$OUT"
               atos -arch arm64 -o "$BIN" -l 0x100AA8000 $A1 $A2 $A3 >> "$OUT" 2>&1
@@ -63,10 +64,12 @@ jobs:
                 echo "  $TGT -> $LAST" >> "$OUT"
               done
             else
-              echo "build FAILED" >> "$OUT"
-              tail -30 "$RUNNER_TEMP/build.log" >> "$OUT"
+              echo "build FAILED - head:" >> "$OUT"
+              head -25 "$RUNNER_TEMP/build.log" >> "$OUT"
+              echo "build FAILED - tail:" >> "$OUT"
+              tail -45 "$RUNNER_TEMP/build.log" >> "$OUT"
             fi
-            rm -rf "$RUNNER_TEMP/dd"
+            rm -rf "$RUNNER_TEMP/MCVibe.xcarchive"
             echo "" >> "$OUT"
           done
 
@@ -74,8 +77,14 @@ jobs:
           cat "$OUT"
 
       - name: Publish symbols to symbols-out branch
+        if: always()
         run: |
-          git checkout -q --orphan symbols-out
-          git add -f symbols.txt
+          set +e
+          mkdir -p "$RUNNER_TEMP/pub"
+          cp "$RUNNER_TEMP/symbols.txt" "$RUNNER_TEMP/pub/symbols.txt" 2>/dev/null || echo "(symbols.txt missing)" > "$RUNNER_TEMP/pub/symbols.txt"
+          cd "$RUNNER_TEMP/pub"
+          git init -q
+          git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          git add symbols.txt
           git -c user.email="ci@users.noreply.github.com" -c user.name="ci" commit -q -m "symbols for crash 61BAF87D"
-          git push -f origin symbols-out
+          git push -f origin HEAD:refs/heads/symbols-out

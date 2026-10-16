@@ -8,7 +8,7 @@ final class AppLog {
 
     /// Convenience so call sites can say `AppLog.add(...)` from anywhere.
     static func add(_ s: String) {
-        shared.add(s)
+        shared.append(s)
     }
 
     private let lock = NSLock()
@@ -25,7 +25,7 @@ final class AppLog {
         lines = UserDefaults.standard.stringArray(forKey: key) ?? []
     }
 
-    func add(_ s: String) {
+    func append(_ s: String) {
         lock.lock()
         lines.append(Self.fmt.string(from: Date()) + "  " + s)
         if lines.count > 250 {
