@@ -1,0 +1,81 @@
+name: symbolize
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/symbolize.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  symbolize:
+    name: Symbolicate crash offsets
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Build candidates and symbolicate crash offsets
+        run: |
+          set -uo pipefail
+          OUT="$RUNNER_TEMP/symbols.txt"
+          : > "$OUT"
+          echo "crash incident 61BAF87D-5560-44DC-A3C1-BBAE31B180AB" >> "$OUT"
+          echo "slice_uuid 7e42e8c2-ba53-3075-9f93-928fc3bc95d0" >> "$OUT"
+          echo "image base 0x100AA8000; offsets 88200 / 89144 / 90464(trap)" >> "$OUT"
+          echo "" >> "$OUT"
+
+          A1=0x100ABD888
+          A2=0x100ABDC38
+          A3=0x100ABE160
+          A1D=$((0x100ABD888))
+          A2D=$((0x100ABDC38))
+          A3D=$((0x100ABE160))
+
+          for SHA in b9eead81184872cfc7481147d2fe86f9e04a45f2 f0bf35adf24ef123ebd4081656447203d3825f62 362b6d872f2c4a1df4a18766932ed464694bb417; do
+            echo "================ $SHA ================" >> "$OUT"
+            git checkout -q "$SHA" || { echo "checkout failed" >> "$OUT"; continue; }
+            (cd ios && xcodegen generate >/dev/null 2>&1) || echo "xcodegen failed" >> "$OUT"
+            if xcodebuild -project ios/MCVibe.xcodeproj -scheme MCVibe -configuration Release \
+                 -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/dd" \
+                 CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+                 STRIP_INSTALLED_PRODUCT=NO DEPLOYMENT_POSTPROCESSING=NO \
+                 build > "$RUNNER_TEMP/build.log" 2>&1; then
+              BIN="$RUNNER_TEMP/dd/Build/Products/Release-iphoneos/MCVibe.app/MCVibe"
+              echo "binary uuid: $(dwarfdump --uuid "$BIN" | awk '{print $2}')" >> "$OUT"
+              echo "-- atos --" >> "$OUT"
+              atos -arch arm64 -o "$BIN" -l 0x100AA8000 $A1 $A2 $A3 >> "$OUT" 2>&1
+              echo "-- nearest symbols (nm -n) --" >> "$OUT"
+              nm -n "$BIN" > "$RUNNER_TEMP/syms.txt" 2>/dev/null || true
+              for TGT in $A1D $A2D $A3D; do
+                LAST="(none)"
+                while read -r ADDR TYPE NAME; do
+                  [ -z "$ADDR" ] && continue
+                  D=$((16#$ADDR)) 2>/dev/null || continue
+                  if [ "$D" -le "$TGT" ]; then LAST="$ADDR $TYPE $NAME"; else break; fi
+                done < "$RUNNER_TEMP/syms.txt"
+                echo "  $TGT -> $LAST" >> "$OUT"
+              done
+            else
+              echo "build FAILED" >> "$OUT"
+              tail -30 "$RUNNER_TEMP/build.log" >> "$OUT"
+            fi
+            rm -rf "$RUNNER_TEMP/dd"
+            echo "" >> "$OUT"
+          done
+
+          cp "$OUT" symbols.txt
+          cat "$OUT"
+
+      - name: Publish symbols to symbols-out branch
+        run: |
+          git checkout -q --orphan symbols-out
+          git add -f symbols.txt
+          git -c user.email="ci@users.noreply.github.com" -c user.name="ci" commit -q -m "symbols for crash 61BAF87D"
+          git push -f origin symbols-out
