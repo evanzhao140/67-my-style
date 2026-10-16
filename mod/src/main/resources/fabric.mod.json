@@ -13,6 +13,9 @@
 		"main": [
 			"com.plantapi.PlantApiMod"
 		],
+		"client": [
+			"com.plantapi.PlantApiClient"
+		],
 		"modmenu": [
 			"com.plantapi.PlantMenu"
 		]

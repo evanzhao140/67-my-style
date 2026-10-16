@@ -41,6 +41,8 @@ public class PlantServer {
 	private final Map<String, Long> lastBurstById = new ConcurrentHashMap<>();
 	private final Deque<Long> burstHistory = new ArrayDeque<>();
 	private final Object rateLock = new Object();
+	private static final long STATE_SYNC_INTERVAL_MS = 2000;
+	private volatile long lastStateSyncAt = 0;
 
 	private volatile boolean running = true;
 	private ServerSocket serverSocket;
@@ -121,6 +123,7 @@ public class PlantServer {
 	private void senderLoop() {
 		while (running) {
 			try {
+				maybeStateSync();
 				String first = outbox.poll(500, TimeUnit.MILLISECONDS);
 				if (first == null) {
 					continue;
@@ -140,17 +143,37 @@ public class PlantServer {
 		}
 	}
 
+	/**
+	 * Re-sends the full active-constant set every couple of seconds. The phone
+	 * (or the Bluetooth bridge) can miss the one-shot "constant" line when it
+	 * is not listening yet or a notification is dropped; this makes the phone
+	 * converge on the real state within ~2 seconds, including a late connect.
+	 */
+	private void maybeStateSync() {
+		long now = System.currentTimeMillis();
+		if (constants.isEmpty() || clients.isEmpty() || now - lastStateSyncAt < STATE_SYNC_INTERVAL_MS) {
+			return;
+		}
+		lastStateSyncAt = now;
+		Map<String, Object> msg = new LinkedHashMap<>();
+		msg.put("type", "constants");
+		msg.put("active", new LinkedHashMap<>(constants));
+		outbox.add(GSON.toJson(msg));
+	}
+
 	/** Sends a burst event (intensity 0-100). Rate limited. */
 	public void burst(String id, int intensity, int durationMs, int pulses) {
 		int master = Math.max(0, Math.min(100, config.masterIntensity));
 		int eff = (int) Math.round(intensity * (master / 100.0));
 		if (eff <= 0) {
+			PlantStatus.burst(id, intensity, 0, "muted");
 			return;
 		}
 
 		long now = System.currentTimeMillis();
 		Long last = lastBurstById.get(id);
 		if (last != null && now - last < 60) {
+			PlantStatus.burst(id, intensity, eff, "rate-limited");
 			return;
 		}
 		lastBurstById.put(id, now);
@@ -161,10 +184,14 @@ public class PlantServer {
 			}
 			int limit = Math.max(1, config.burstRateLimitPerSecond);
 			if (burstHistory.size() >= limit) {
+				PlantStatus.burst(id, intensity, eff, "rate-limited");
 				return;
 			}
 			burstHistory.addLast(now);
 		}
+
+		int effective = Math.max(eff, PlantStatus.maxConstant());
+		PlantStatus.burst(id, intensity, effective, effective > eff ? "raised" : null);
 
 		Map<String, Object> msg = new LinkedHashMap<>();
 		msg.put("type", "burst");
@@ -188,6 +215,7 @@ public class PlantServer {
 			return;
 		}
 		constants.put(id, eff);
+		PlantStatus.constantSet(id, eff);
 		Map<String, Object> msg = new LinkedHashMap<>();
 		msg.put("type", "constant");
 		msg.put("id", id);
@@ -198,6 +226,7 @@ public class PlantServer {
 	/** Stops one constant vibration source. */
 	public void constantEnd(String id) {
 		if (constants.remove(id) != null) {
+			PlantStatus.constantEnd(id);
 			Map<String, Object> msg = new LinkedHashMap<>();
 			msg.put("type", "constant_end");
 			msg.put("id", id);
@@ -211,6 +240,7 @@ public class PlantServer {
 			return;
 		}
 		constants.clear();
+		PlantStatus.clearConstants();
 		Map<String, Object> msg = new LinkedHashMap<>();
 		msg.put("type", "clear");
 		outbox.add(GSON.toJson(msg));

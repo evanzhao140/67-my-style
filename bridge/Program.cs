@@ -21,6 +21,7 @@ class Program
     static volatile bool HaveSubscriber = false;
     static long SentMessages = 0;
     static long SentChunks = 0;
+    static string LastStateLine;
 
     static async Task<int> Main()
     {
@@ -57,6 +58,10 @@ class Program
         {
             HaveSubscriber = EventChar.SubscribedClients.Count > 0;
             Console.WriteLine(HaveSubscriber ? ">> Phone connected" : ">> Phone disconnected");
+            if (HaveSubscriber && LastStateLine != null)
+            {
+                _ = SendLineToPhone(LastStateLine);
+            }
         };
         provider.AdvertisementStatusChanged += (s, e) =>
             Console.WriteLine($">> BLE advertising: {provider.AdvertisementStatus}");
@@ -92,7 +97,8 @@ class Program
                 {
                     var line = await reader.ReadLineAsync();
                     if (line == null) break;
-                    if (line.Length == 0 || line.Length > 900) continue;
+                    if (line.Length == 0 || line.Length > 2300) continue;
+                    if (line.Contains("\"type\":\"constants\"")) LastStateLine = line;
                     await SendLineToPhone(line);
                 }
                 Console.WriteLine(">> Source closed the connection.");

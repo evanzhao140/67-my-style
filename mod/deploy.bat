@@ -1,7 +1,7 @@
 @echo off
-REM Build output -> Modrinth App profile "262" (canonical deploy target).
+REM Build output -> Modrinth App profile "267" (canonical deploy target).
 set "SRC=%~dp0build\libs\plantapi-1.0.0.jar"
-set "DST=%APPDATA%\ModrinthApp\profiles\262\mods"
+set "DST=%APPDATA%\ModrinthApp\profiles\267\mods"
 if not exist "%SRC%" (
   echo Build output not found: %SRC%
   echo Run first: gradlew.bat --no-daemon build

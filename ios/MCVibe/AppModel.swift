@@ -166,6 +166,19 @@ final class AppModel: ObservableObject {
                 lastEvent = "⚡ \(msg.id ?? "burst") • \(Int(level.rounded()))%"
             }
 
+        case "constants":
+            // Full state resync from the PC: replaces the local map so a missed
+            // message can never leave a constant missing or stuck on.
+            if let active = msg.active {
+                constants = active
+                applyConstants()
+                if let top = constants.max(by: { $0.value < $1.value }) {
+                    lastEvent = "≈ \(top.key) • \(Int(top.value))%"
+                } else {
+                    lastEvent = ""
+                }
+            }
+
         case "constant":
             if let id = msg.id {
                 constants[id] = msg.intensity ?? 0

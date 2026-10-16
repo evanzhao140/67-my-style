@@ -51,7 +51,6 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.phys.BlockHitResult;
 
 import java.util.ArrayList;
@@ -323,7 +322,6 @@ public class PlantDirector {
 		}
 		if ((TICKS + stagger) % 10 == 0) {
 			scanCreepers(p, st);
-			scanLight(p, st);
 		}
 		if ((TICKS + stagger) % 20 == 0) {
 			scanHostiles(p, st);
@@ -415,11 +413,6 @@ public class PlantDirector {
 			st.desired.put("near_hostiles", scaled(c, highBased(st.hostileCount, c.threshold)));
 		}
 
-		c = cfg.constants.get("in_darkness");
-		if (c != null && c.intensity > 0 && st.darkness < c.threshold) {
-			st.desired.put("in_darkness", scaled(c, zeroBased(st.darkness, c.threshold)));
-		}
-
 		c = cfg.constants.get("boss_nearby");
 		if (c != null && c.intensity > 0 && st.bossDistance < c.threshold) {
 			st.desired.put("boss_nearby", scaled(c, zeroBased(st.bossDistance, c.threshold)));
@@ -504,12 +497,6 @@ public class PlantDirector {
 			}
 		}
 		if (st.fusedCreepers.size() > 64) st.fusedCreepers.clear();
-	}
-
-	private static void scanLight(ServerPlayer p, PlayerState st) {
-		if (p.level() instanceof ServerLevel serverLevel) {
-			st.darkness = serverLevel.getBrightness(LightLayer.BLOCK, p.blockPosition());
-		}
 	}
 
 	private static void scanHostiles(ServerPlayer p, PlayerState st) {
@@ -744,7 +731,6 @@ public class PlantDirector {
 		Raid lastRaid;
 		int hostileCount;
 		double bossDistance = Double.MAX_VALUE;
-		double darkness = 15;
 		double toolDurability = 100;
 		double armorDurability = 100;
 		boolean invSeeded;

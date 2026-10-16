@@ -10,4 +10,5 @@ struct VibeMessage: Decodable {
     let name: String?        // hello: PC name
     let mc: String?          // hello: Minecraft version
     let proto: Int?
+    let active: [String: Double]?   // constants: full active-constant map
 }

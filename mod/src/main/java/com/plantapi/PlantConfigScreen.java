@@ -152,7 +152,7 @@ public final class PlantConfigScreen {
 		ConfigCategory category = builder.getOrCreateCategory(Component.literal("Test"));
 
 		category.addEntry(eb.startIntSlider(Component.literal("Test Burst Intensity"), cfg.testBurstIntensity, 0, 100)
-				.setDefaultValue(50)
+				.setDefaultValue(70)
 				.setSaveConsumer(v -> cfg.testBurstIntensity = v)
 				.build());
 

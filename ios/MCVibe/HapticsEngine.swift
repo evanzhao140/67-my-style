@@ -7,9 +7,9 @@ import AVFoundation
 /// Intensity is given as 0...100, where 100 = the strongest vibration the phone can produce.
 ///
 /// Design:
-/// - Bursts are TRANSIENT events (one per pulse). Transients use the full peak
-///   strength of the haptic hardware, so pulses feel much stronger than a short
-///   continuous rumble.
+/// - Bursts are trains of TRANSIENT events: several taps span each pulse, so the
+///   burst reads as longer and harder while still using the full peak strength
+///   of the haptic hardware (stronger than a continuous rumble of equal level).
 /// - The constant (looping) vibration is a single advanced player with a
 ///   continuous event.
 /// - Every play path re-checks the engine and restarts it when needed, and all
@@ -99,12 +99,21 @@ final class HapticsEngine {
     }
 
     /// Burst = a train of transient taps. Intensity 0...100, span in ms, 1...5 pulses.
+    /// Transients are instantaneous by design; a rapid train of them at full
+    /// strength reads as one longer, harder tap (and stays stronger than a
+    /// continuous rumble of the same level).
     func burst(intensity: Double, durationMs: Int, pulses: Int) {
         let level = min(max(intensity / 100.0, 0.0), 1.0)
         guard level.isFinite, level > 0.01 else { return }
         let count = min(max(pulses, 1), 5)
         let span = Double(min(max(durationMs, 40), 2000)) / 1000.0
         let spacing = count > 1 ? max(span / Double(count - 1), 0.06) : 0
+        let pulseSpan = count > 1 ? spacing : span
+
+        // One pulse = a short train of transients spanning the pulse duration.
+        let maxGap = 0.055
+        let taps = min(10, max(1, Int((pulseSpan / maxGap).rounded())))
+        let gap = taps > 1 ? min(maxGap, pulseSpan / Double(taps - 1)) : 0
 
         // Flood guard: never hammer CoreHaptics faster than ~20 bursts per second.
         let now = Date()
@@ -112,7 +121,7 @@ final class HapticsEngine {
         lastBurstAt = now
         if now.timeIntervalSince(lastBurstLogAt) > 0.5 {
             lastBurstLogAt = now
-            AppLog.add("haptic burst \(Int(level * 100))% x\(count)")
+            AppLog.add("haptic burst \(Int(level * 100))% x\(count) (\(taps) taps/pulse)")
         }
 
         guard supported, let eng = ensureEngine() else {
@@ -122,15 +131,18 @@ final class HapticsEngine {
         do {
             var events: [CHHapticEvent] = []
             for i in 0..<count {
-                let params = [
-                    CHHapticEventParameter(parameterID: .hapticIntensity, value: Float(level)),
-                    CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.7),
-                ]
-                events.append(CHHapticEvent(
-                    eventType: .hapticTransient,
-                    parameters: params,
-                    relativeTime: Double(i) * spacing
-                ))
+                let t0 = Double(i) * spacing
+                for k in 0..<taps {
+                    let params = [
+                        CHHapticEventParameter(parameterID: .hapticIntensity, value: Float(level)),
+                        CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.7),
+                    ]
+                    events.append(CHHapticEvent(
+                        eventType: .hapticTransient,
+                        parameters: params,
+                        relativeTime: t0 + Double(k) * gap
+                    ))
+                }
             }
             let pattern = try CHHapticPattern(events: events, parameters: [])
             let player = try eng.makePlayer(with: pattern)
@@ -143,11 +155,33 @@ final class HapticsEngine {
     }
 
     /// Constant vibration level 0...100. 0 stops it.
+    /// Updates are applied to the RUNNING player through the intensity-control
+    /// parameter, so the constant tracks game state smoothly and as fast as
+    /// updates arrive (no restart glitches between updates).
     func setConstant(_ intensity: Double) {
         let level = min(max(intensity / 100.0, 0.0), 1.0)
         let safe = level.isFinite ? level : 0
-        guard abs(safe - currentConstant) > 0.005 else { return }
+        guard abs(safe - currentConstant) > 0.002 else { return }
         currentConstant = safe
+        if safe <= 0.005 {
+            AppLog.add("haptic constant off")
+            rebuildConstant()
+            return
+        }
+        if let player = constantPlayer, engineRunning {
+            do {
+                let param = CHHapticDynamicParameter(
+                    parameterID: .hapticIntensityControl,
+                    value: Float(safe),
+                    relativeTime: 0
+                )
+                try player.sendParameters([param], atTime: CHHapticTimeImmediate)
+                AppLog.add("haptic constant \(Int(safe * 100))% (live)")
+                return
+            } catch {
+                AppLog.add("haptics: live constant update failed, rebuilding")
+            }
+        }
         AppLog.add("haptic constant \(Int(safe * 100))%")
         rebuildConstant()
     }
@@ -164,8 +198,11 @@ final class HapticsEngine {
         }
         guard supported, currentConstant > 0.005, let eng = ensureEngine() else { return }
         do {
+            // Base intensity 1.0; the actual strength is driven live through the
+            // intensity-control parameter so the running player can be retuned
+            // without restarting.
             let params = [
-                CHHapticEventParameter(parameterID: .hapticIntensity, value: Float(currentConstant)),
+                CHHapticEventParameter(parameterID: .hapticIntensity, value: 1.0),
                 CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.25),
             ]
             let event = CHHapticEvent(eventType: .hapticContinuous, parameters: params, relativeTime: 0, duration: 2.5)
@@ -173,6 +210,12 @@ final class HapticsEngine {
             let player = try eng.makeAdvancedPlayer(with: pattern)
             player.loopEnabled = true
             try player.start(atTime: CHHapticTimeImmediate)
+            let param = CHHapticDynamicParameter(
+                parameterID: .hapticIntensityControl,
+                value: Float(currentConstant),
+                relativeTime: 0
+            )
+            try? player.sendParameters([param], atTime: CHHapticTimeImmediate)
             constantPlayer = player
         } catch {
             constantPlayer = nil
