@@ -10,6 +10,19 @@ final class AppModel: ObservableObject {
     @Published var manualInput = ""
     @Published var lastEvent = ""
 
+    /// Test switch: when on, incoming events are still shown but nothing vibrates.
+    /// Persisted so it survives relaunches.
+    @Published var hapticsMuted: Bool = false {
+        didSet {
+            UserDefaults.standard.set(hapticsMuted, forKey: "hapticsMuted")
+            if hapticsMuted {
+                haptics.setConstant(0)
+            } else {
+                applyConstants()
+            }
+        }
+    }
+
     private let link = LinkClient()
     private let discovery = Discovery()
     private let haptics = HapticsEngine.shared
@@ -18,6 +31,7 @@ final class AppModel: ObservableObject {
 
     init() {
         manualInput = UserDefaults.standard.string(forKey: "lastHostInput") ?? ""
+        hapticsMuted = UserDefaults.standard.bool(forKey: "hapticsMuted")
 
         link.onPhase = { [weak self] phase, detail in
             Task { @MainActor in self?.applyPhase(phase, detail) }
@@ -32,11 +46,10 @@ final class AppModel: ObservableObject {
 
     func start() {
         discovery.start()
-        if let savedHost = UserDefaults.standard.string(forKey: "lastHost"),
-           let savedPort = UserDefaults.standard.object(forKey: "lastPort") as? Int,
-           let port = UInt16(exactly: savedPort) {
-            connect(host: savedHost, port: port)
-        }
+        // NOTE: On purpose, the app does NOT auto-connect on launch.
+        // Re-connecting to the last host automatically turned any problem in
+        // the connect path into a crash loop that made the whole app unusable.
+        // Tap a discovered PC or type the IP to connect.
     }
 
     func connect(host: String, port: UInt16) {
@@ -92,8 +105,11 @@ final class AppModel: ObservableObject {
             // A burst is raised to the level of the strongest active constant,
             // so you never feel a weaker tap than the ongoing vibration.
             let floor = constants.values.max() ?? 0
-            let level = max(msg.intensity ?? 50, floor)
-            haptics.burst(intensity: level, durationMs: msg.durationMs ?? 200, pulses: msg.pulses ?? 1)
+            let raw = max(msg.intensity ?? 50, floor)
+            let level = raw.isFinite ? raw : floor
+            if !hapticsMuted {
+                haptics.burst(intensity: level, durationMs: msg.durationMs ?? 200, pulses: msg.pulses ?? 1)
+            }
             lastEvent = "⚡ \(msg.id ?? "burst") • \(Int(level.rounded()))%"
 
         case "constant":
@@ -120,6 +136,6 @@ final class AppModel: ObservableObject {
     }
 
     private func applyConstants() {
-        haptics.setConstant(constants.values.max() ?? 0)
+        haptics.setConstant(hapticsMuted ? 0 : (constants.values.max() ?? 0))
     }
 }

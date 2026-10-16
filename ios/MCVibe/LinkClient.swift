@@ -52,7 +52,11 @@ final class LinkClient {
         let params = NWParameters.tcp
         params.allowLocalEndpointReuse = true
 
-        let conn = NWConnection(host: NWEndpoint.Host(host), port: NWEndpoint.Port(rawValue: port)!, using: params)
+        guard let nwPort = NWEndpoint.Port(rawValue: port) else {
+            emit(.idle, "Connection failed: bad port \(port)")
+            return
+        }
+        let conn = NWConnection(host: NWEndpoint.Host(host), port: nwPort, using: params)
         connection = conn
         emit(.connecting, "Connecting to \(host)…")
 

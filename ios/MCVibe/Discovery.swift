@@ -19,6 +19,7 @@ final class Discovery {
     private var fd: Int32 = -1
     private var running = false
     private var hosts: [String: (host: DiscoveredHost, seen: Date)] = [:]
+    private var lastPublished: [DiscoveredHost] = []
     private let broadcastPort: UInt16 = 25667
 
     func start() {
@@ -31,9 +32,10 @@ final class Discovery {
     }
 
     func stop() {
+        // Stop the loop synchronously; the socket cleanup runs right after it exits.
+        running = false
         queue.async { [weak self] in
             guard let self else { return }
-            self.running = false
             if self.fd >= 0 {
                 close(self.fd)
                 self.fd = -1
@@ -106,14 +108,16 @@ final class Discovery {
         guard
             let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
             obj["magic"] as? String == "PLANTAPI",
-            let portNumber = obj["port"] as? Int
+            let portNumber = obj["port"] as? Int,
+            let port = UInt16(exactly: portNumber),
+            let cstr = inet_ntoa(from.sin_addr)
         else { return }
 
-        let hostIP = String(cString: inet_ntoa(from.sin_addr))
+        let hostIP = String(cString: cstr)
         let host = DiscoveredHost(
             name: (obj["name"] as? String) ?? hostIP,
             host: hostIP,
-            port: UInt16(portNumber),
+            port: port,
             mc: (obj["mc"] as? String) ?? "?"
         )
         hosts[host.id] = (host, Date())
@@ -123,6 +127,8 @@ final class Discovery {
         let cutoff = Date().addingTimeInterval(-6)
         hosts = hosts.filter { $0.value.seen > cutoff }
         let list = hosts.values.map { $0.host }.sorted { $0.name < $1.name }
+        guard list != lastPublished else { return }
+        lastPublished = list
         onHosts?(list)
     }
 }

@@ -134,6 +134,13 @@ struct ContentView: View {
     @ViewBuilder
     private var footer: some View {
         VStack(spacing: 6) {
+            Toggle(isOn: $model.hapticsMuted) {
+                Text("Mute vibrations (test mode)")
+                    .font(.caption)
+            }
+            .tint(.gray)
+            .padding(.bottom, 2)
+
             if !model.lastEvent.isEmpty {
                 Text(model.lastEvent)
                     .font(.caption.monospaced())

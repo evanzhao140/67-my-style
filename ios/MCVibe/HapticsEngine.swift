@@ -4,15 +4,25 @@ import UIKit
 
 /// Plays burst and constant haptics with CoreHaptics.
 /// Intensity is given as 0...100, where 100 = the strongest vibration the phone can produce.
+///
+/// Design notes (crash safety):
+/// - Bursts use plain one-shot players. The engine owns a one-shot player until
+///   its pattern finishes, so there is nothing to track, stop or release early.
+/// - The constant (looping) player is the only advanced player. When it is
+///   stopped, the reference is kept in `retiringConstantPlayer` so CoreHaptics
+///   never sees a player deallocated while it is still shutting down.
 @MainActor
 final class HapticsEngine {
     static let shared = HapticsEngine()
 
     private let supported = CHHapticEngine.capabilitiesForHardware().supportsHaptics
     private var engine: CHHapticEngine?
+
     private var constantPlayer: CHHapticAdvancedPatternPlayer?
+    private var retiringConstantPlayer: CHHapticAdvancedPatternPlayer?
     private var currentConstant: Double = 0
-    private var bursts: [CHHapticAdvancedPatternPlayer] = []
+
+    private var lastBurstAt = Date.distantPast
 
     private init() {
         guard supported else { return }
@@ -37,17 +47,23 @@ final class HapticsEngine {
         guard let engine else { return }
         do {
             try engine.start()
+            retiringConstantPlayer = constantPlayer
             constantPlayer = nil
             if currentConstant > 0 { rebuildConstant() }
         } catch {
-            // Engine keeps trying on the next event.
+            // The engine retries on the next event.
         }
     }
 
     /// Burst vibration. Intensity 0...100, duration in ms, 1...5 pulses.
     func burst(intensity: Double, durationMs: Int, pulses: Int) {
         let level = min(max(intensity / 100.0, 0.0), 1.0)
-        guard level > 0.01 else { return }
+        guard level.isFinite, level > 0.01 else { return }
+
+        // Flood guard: never hammer CoreHaptics faster than ~20 bursts per second.
+        let now = Date()
+        guard now.timeIntervalSince(lastBurstAt) > 0.05 else { return }
+        lastBurstAt = now
 
         let dur = Double(min(max(durationMs, 40), 2000)) / 1000.0
         let count = min(max(pulses, 1), 5)
@@ -73,33 +89,30 @@ final class HapticsEngine {
                 ))
             }
             let pattern = try CHHapticPattern(events: events, parameters: [])
-            let player = try engine.makeAdvancedPlayer(with: pattern)
-            player.completionHandler = { [weak self] _ in
-                Task { @MainActor in self?.pruneBursts() }
-            }
+            let player = try engine.makePlayer(with: pattern)
             try player.start(atTime: CHHapticTimeImmediate)
-
-            if bursts.count >= 8 {
-                let old = bursts.removeFirst()
-                try? old.stop(atTime: CHHapticTimeImmediate)
-            }
-            bursts.append(player)
         } catch {
-            // Ignore; haptics recover on the next event.
+            fallbackBurst(level: level)
         }
     }
 
     /// Constant vibration level 0...100. 0 stops it.
     func setConstant(_ intensity: Double) {
         let level = min(max(intensity / 100.0, 0.0), 1.0)
-        guard abs(level - currentConstant) > 0.005 else { return }
-        currentConstant = level
+        let safe = level.isFinite ? level : 0
+        guard abs(safe - currentConstant) > 0.005 else { return }
+        currentConstant = safe
         rebuildConstant()
     }
 
     private func rebuildConstant() {
         if let player = constantPlayer {
+            player.loopEnabled = false
             try? player.stop(atTime: CHHapticTimeImmediate)
+            // Keep the stopped player alive instead of releasing it right away:
+            // freeing an advanced player immediately after stop() is a known
+            // source of CoreHaptics crashes.
+            retiringConstantPlayer = player
             constantPlayer = nil
         }
         guard supported, let engine, currentConstant > 0.005 else { return }
@@ -122,15 +135,6 @@ final class HapticsEngine {
     func stopAll() {
         currentConstant = 0
         rebuildConstant()
-        for p in bursts { try? p.stop(atTime: CHHapticTimeImmediate) }
-        bursts.removeAll()
-    }
-
-    private func pruneBursts() {
-        while bursts.count > 8 {
-            let old = bursts.removeFirst()
-            try? old.stop(atTime: CHHapticTimeImmediate)
-        }
     }
 
     /// Fallback for devices without haptics support (simulator / iPad): a single impact.
