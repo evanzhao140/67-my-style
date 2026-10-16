@@ -12,7 +12,11 @@
 	"client": [
 		"client.MultiPlayerGameModeMixin",
 		"client.ClientPacketListenerMixin",
-		"client.AdvancementToastMixin"
+		"client.AdvancementToastMixin",
+		"client.CraftTakeMixin",
+		"client.SmeltTakeMixin",
+		"client.TradeTakeMixin",
+		"client.ItemStackHurtMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

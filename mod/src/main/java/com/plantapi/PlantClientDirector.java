@@ -234,6 +234,26 @@ public class PlantClientDirector {
 		if (!name.isEmpty() && content.toLowerCase(Locale.ROOT).contains(name)) emit("chat_mention");
 	}
 
+	public static void onCraftTaken() {
+		if (!active()) return;
+		emit("craft_item");
+	}
+
+	public static void onSmeltTaken() {
+		if (!active()) return;
+		emit("smelt_take");
+	}
+
+	public static void onTradeTaken() {
+		if (!active()) return;
+		emit("trade");
+	}
+
+	public static void onItemBroken(boolean armor) {
+		if (!active()) return;
+		emit(armor ? "armor_break" : "tool_break");
+	}
+
 	// ------------------------------------------------------------------
 	// Raid tracking (from the boss-bar packets the server sends us)
 	// ------------------------------------------------------------------
