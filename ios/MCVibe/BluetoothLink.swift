@@ -164,7 +164,7 @@ extension BluetoothLink: CBCentralManagerDelegate {
         target = peripheral
         peripheral.delegate = self
         emit(.connecting, "Found your PC — connecting…")
-        peripheral.connect()
+        central.connect(peripheral, options: nil)
         armConnectTimeout(for: peripheral)
     }
 
