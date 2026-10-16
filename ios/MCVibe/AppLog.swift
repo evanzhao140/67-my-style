@@ -6,6 +6,11 @@ import Foundation
 final class AppLog {
     static let shared = AppLog()
 
+    /// Convenience so call sites can say `AppLog.add(...)` from anywhere.
+    static func add(_ s: String) {
+        shared.add(s)
+    }
+
     private let lock = NSLock()
     private var lines: [String] = []
     private let key = "debugLog"

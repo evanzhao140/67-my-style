@@ -7,6 +7,9 @@ on:
       - '.github/**'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   mod:
     name: Build Fabric mod
@@ -48,6 +51,7 @@ jobs:
 
       - name: Build unsigned archive
         run: |
+          set -o pipefail
           xcodebuild \
             -project ios/MCVibe.xcodeproj \
             -scheme MCVibe \
@@ -57,7 +61,16 @@ jobs:
             archive \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY=""
+            CODE_SIGN_IDENTITY="" 2>&1 | tee build-ios.log
+
+      - name: Publish build log if this run failed
+        if: failure()
+        run: |
+          git checkout -q --orphan build-log-out
+          tail -c 8000 build-ios.log > build-log.txt 2>/dev/null || echo "(no ios build log)" > build-log.txt
+          git add -f build-log.txt
+          git -c user.email="ci@users.noreply.github.com" -c user.name="ci" commit -q -m "ios build log"
+          git push -f origin build-log-out
 
       - name: Package IPA
         run: |
