@@ -1,8 +1,12 @@
 import Foundation
-import Network
+import Darwin
 
-/// TCP client that connects to the MCVibe mod's server on the PC.
-/// Receives newline-delimited JSON messages. Auto-reconnects while enabled.
+/// TCP client built directly on BSD sockets, in the same style as the UDP
+/// discovery socket. (The previous version used Network.framework, whose
+/// callbacks are where the on-device crash happened.)
+///
+/// Everything runs on one private serial queue. `onPhase` and `onMessage`
+/// are called on that queue; observers hop to the main actor themselves.
 final class LinkClient {
     enum Phase: Equatable {
         case idle
@@ -14,99 +18,175 @@ final class LinkClient {
     var onMessage: ((VibeMessage) -> Void)?
 
     private let queue = DispatchQueue(label: "mcvibe.link")
-    private var connection: NWConnection?
+    private var fd: Int32 = -1
     private var buffer = Data()
     private var host = ""
     private var port: UInt16 = 0
     private var wantsConnection = false
-    private var retryWork: DispatchWorkItem?
+
+    /// Generation counter. Incremented on every connect/disconnect so that
+    /// stale receive loops and retries from an older session do nothing.
+    private var gen = 0
+
+    // MARK: - Public API
 
     func connect(host: String, port: UInt16) {
         queue.async {
             self.host = host
             self.port = port
             self.wantsConnection = true
-            self.startConnection()
+            self.gen += 1
+            self.teardown()
+            self.startLocked()
         }
     }
 
     func disconnect() {
         queue.async {
             self.wantsConnection = false
-            self.retryWork?.cancel()
-            self.retryWork = nil
-            self.connection?.cancel()
-            self.connection = nil
+            self.gen += 1
+            self.teardown()
             self.emit(.idle, "Not connected")
         }
     }
 
-    private func startConnection() {
+    func sendRaw(_ s: String) {
+        queue.async { self.sendRawLocked(s) }
+    }
+
+    // MARK: - Connection lifecycle (queue-confined)
+
+    private func startLocked() {
         guard wantsConnection, !host.isEmpty, port != 0 else { return }
-        retryWork?.cancel()
-        retryWork = nil
-        connection?.stateUpdateHandler = nil
-        connection?.cancel()
-
-        buffer.removeAll()
-        let params = NWParameters.tcp
-        params.allowLocalEndpointReuse = true
-
-        guard let nwPort = NWEndpoint.Port(rawValue: port) else {
-            emit(.idle, "Connection failed: bad port \(port)")
+        guard let addr = resolveIPv4(host) else {
+            AppLog.add("resolve failed for \(host)")
+            emit(.idle, "Cannot resolve \(host)")
+            scheduleRetryLocked()
             return
         }
-        let conn = NWConnection(host: NWEndpoint.Host(host), port: nwPort, using: params)
-        connection = conn
-        emit(.connecting, "Connecting to \(host)…")
 
-        conn.stateUpdateHandler = { [weak self] state in
-            guard let self else { return }
-            switch state {
-            case .ready:
-                self.emit(.connected, "Connected")
-                self.sendRaw(#"{"type":"hello","proto":1,"client":"MCVibe iOS"}"# + "\n")
-                self.receiveLoop(on: conn)
-            case .waiting(let err):
-                self.emit(.connecting, "Waiting… \(err.localizedDescription)")
-            case .failed(let err):
-                self.emit(.idle, "Connection failed: \(err.localizedDescription)")
-                self.scheduleRetry()
-            case .cancelled:
-                break
-            default:
-                break
+        let sock = socket(AF_INET, SOCK_STREAM, 0)
+        guard sock >= 0 else {
+            AppLog.add("socket() failed errno=\(errno)")
+            emit(.idle, "Connection failed")
+            scheduleRetryLocked()
+            return
+        }
+        var on: Int32 = 1
+        setsockopt(sock, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
+
+        var sa = sockaddr_in()
+        sa.sin_family = sa_family_t(AF_INET)
+        sa.sin_port = port.bigEndian
+        sa.sin_addr = addr
+
+        emit(.connecting, "Connecting to \(host)…")
+        AppLog.add("tcp connect \(host):\(port)")
+
+        // Non-blocking connect with a hard 4 s timeout, so an unreachable
+        // address can never hang the queue for long.
+        _ = fcntl(sock, F_SETFL, O_NONBLOCK)
+        let rc = withUnsafePointer(to: &sa) { ptr in
+            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sap in
+                connect(sock, sap, socklen_t(MemoryLayout<sockaddr_in>.size))
             }
         }
-        conn.start(queue: queue)
+        var connected = false
+        if rc == 0 {
+            connected = true
+        } else if errno == EINPROGRESS {
+            var pfd = pollfd(fd: sock, events: Int16(POLLOUT), revents: 0)
+            let pr = poll(&pfd, 1, 4000)
+            if pr == 1 && (pfd.revents & Int16(POLLOUT)) != 0 {
+                var soerr: Int32 = 0
+                var len = socklen_t(MemoryLayout<Int32>.size)
+                if getsockopt(sock, SOL_SOCKET, SO_ERROR, &soerr, &len) == 0 && soerr == 0 {
+                    connected = true
+                } else {
+                    AppLog.add("connect refused errno=\(soerr)")
+                }
+            } else {
+                AppLog.add("connect timed out (pr=\(pr))")
+            }
+        } else {
+            AppLog.add("connect() failed errno=\(errno)")
+        }
+
+        guard connected else {
+            close(sock)
+            emit(.idle, "Connection failed: \(host) unreachable")
+            scheduleRetryLocked()
+            return
+        }
+
+        _ = fcntl(sock, F_SETFL, 0)
+        var tv = timeval(tv_sec: 1, tv_usec: 0)
+        setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
+        setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, &on, socklen_t(MemoryLayout<Int32>.size))
+
+        fd = sock
+        buffer.removeAll()
+        AppLog.add("tcp connected")
+        emit(.connected, "Connected")
+        sendRawLocked(#"{"type":"hello","proto":1,"client":"MCVibe iOS"}"# + "\n")
+        recvStep(sock: sock, myGen: gen)
     }
 
-    private func scheduleRetry() {
-        guard wantsConnection else { return }
-        retryWork?.cancel()
-        let work = DispatchWorkItem { [weak self] in self?.startConnection() }
-        retryWork = work
-        queue.asyncAfter(deadline: .now() + 2.0, execute: work)
-    }
-
-    private func receiveLoop(on conn: NWConnection) {
-        conn.receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) { [weak self] data, _, isComplete, error in
-            guard let self else { return }
-            if let data, !data.isEmpty {
-                self.buffer.append(data)
+    private func recvStep(sock: Int32, myGen: Int) {
+        queue.async {
+            guard self.wantsConnection, self.gen == myGen, self.fd == sock else { return }
+            var buf = [UInt8](repeating: 0, count: 4096)
+            let n = recv(sock, &buf, buf.count, 0)
+            if n > 0 {
+                self.buffer.append(contentsOf: buf.prefix(Int(n)))
                 self.drainLines()
-            }
-            if let error {
-                self.emit(.idle, "Disconnected: \(error.localizedDescription)")
-                self.scheduleRetry()
-                return
-            }
-            if isComplete {
+            } else if n == 0 {
+                AppLog.add("peer closed the connection")
                 self.emit(.idle, "Disconnected")
-                self.scheduleRetry()
+                self.teardown()
+                self.scheduleRetryLocked()
                 return
+            } else {
+                let e = errno
+                if e != EAGAIN && e != EWOULDBLOCK && e != EINTR {
+                    AppLog.add("recv failed errno=\(e)")
+                    self.emit(.idle, "Disconnected")
+                    self.teardown()
+                    self.scheduleRetryLocked()
+                    return
+                }
+                // Receive timeout tick: fall through, check state, keep waiting.
             }
-            self.receiveLoop(on: conn)
+            self.recvStep(sock: sock, myGen: myGen)
+        }
+    }
+
+    private func scheduleRetryLocked() {
+        guard wantsConnection else { return }
+        let myGen = gen
+        queue.asyncAfter(deadline: .now() + 2.0) {
+            guard self.wantsConnection, self.gen == myGen, self.fd < 0 else { return }
+            AppLog.add("retrying connection")
+            self.startLocked()
+        }
+    }
+
+    private func teardown() {
+        if fd >= 0 {
+            close(fd)
+            fd = -1
+        }
+        buffer.removeAll()
+    }
+
+    private func sendRawLocked(_ s: String) {
+        guard fd >= 0 else { return }
+        let bytes = Array(s.utf8)
+        let n = bytes.withUnsafeBytes { raw in
+            send(fd, raw.baseAddress, raw.count, 0)
+        }
+        if n < 0 {
+            AppLog.add("send failed errno=\(errno)")
         }
     }
 
@@ -115,17 +195,30 @@ final class LinkClient {
             let lineData = buffer.prefix(upTo: idx)
             buffer.removeFirst(idx + 1)
             guard !lineData.isEmpty else { continue }
-            if let msg = try? JSONDecoder().decode(VibeMessage.self, from: Data(lineData)) {
-                onMessage?(msg)
+            guard let msg = try? JSONDecoder().decode(VibeMessage.self, from: Data(lineData)) else {
+                AppLog.add("bad json from PC")
+                continue
             }
+            onMessage?(msg)
         }
-    }
-
-    func sendRaw(_ s: String) {
-        connection?.send(content: Data(s.utf8), completion: .contentProcessed { _ in })
     }
 
     private func emit(_ p: Phase, _ detail: String) {
         onPhase?(p, detail)
+    }
+
+    private func resolveIPv4(_ host: String) -> in_addr? {
+        var a = in_addr()
+        if inet_pton(AF_INET, host, &a) == 1 {
+            return a
+        }
+        var hints = addrinfo()
+        hints.ai_family = AF_INET
+        hints.ai_socktype = SOCK_STREAM
+        var res: UnsafeMutablePointer<addrinfo>?
+        guard getaddrinfo(host, nil, &hints, &res) == 0, let first = res else { return nil }
+        defer { freeaddrinfo(res) }
+        guard let sap = first.pointee.ai_addr, first.pointee.ai_family == AF_INET else { return nil }
+        return sap.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { $0.pointee.sin_addr }
     }
 }

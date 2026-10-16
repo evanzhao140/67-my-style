@@ -23,6 +23,7 @@ final class HapticsEngine {
     private var currentConstant: Double = 0
 
     private var lastBurstAt = Date.distantPast
+    private var lastBurstLogAt = Date.distantPast
 
     private init() {
         guard supported else { return }
@@ -64,6 +65,10 @@ final class HapticsEngine {
         let now = Date()
         guard now.timeIntervalSince(lastBurstAt) > 0.05 else { return }
         lastBurstAt = now
+        if now.timeIntervalSince(lastBurstLogAt) > 0.5 {
+            lastBurstLogAt = now
+            AppLog.add("haptic burst \(Int(level * 100))%")
+        }
 
         let dur = Double(min(max(durationMs, 40), 2000)) / 1000.0
         let count = min(max(pulses, 1), 5)
@@ -102,6 +107,7 @@ final class HapticsEngine {
         let safe = level.isFinite ? level : 0
         guard abs(safe - currentConstant) > 0.005 else { return }
         currentConstant = safe
+        AppLog.add("haptic constant \(Int(safe * 100))%")
         rebuildConstant()
     }
 

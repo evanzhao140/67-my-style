@@ -32,6 +32,7 @@ final class AppModel: ObservableObject {
     init() {
         manualInput = UserDefaults.standard.string(forKey: "lastHostInput") ?? ""
         hapticsMuted = UserDefaults.standard.bool(forKey: "hapticsMuted")
+        AppLog.add("app launched (v2)")
 
         link.onPhase = { [weak self] phase, detail in
             Task { @MainActor in self?.applyPhase(phase, detail) }
@@ -55,6 +56,7 @@ final class AppModel: ObservableObject {
     func connect(host: String, port: UInt16) {
         UserDefaults.standard.set(host, forKey: "lastHost")
         UserDefaults.standard.set(Int(port), forKey: "lastPort")
+        AppLog.add("connect to \(host):\(port)")
         link.connect(host: host, port: port)
     }
 
@@ -81,6 +83,7 @@ final class AppModel: ObservableObject {
 
     private func applyPhase(_ phase: LinkClient.Phase, _ detail: String) {
         self.phase = phase
+        AppLog.add("status: \(detail)")
         if phase == .connected {
             statusText = connectedName.isEmpty ? "Connected" : "Connected to \(connectedName)"
             UIApplication.shared.isIdleTimerDisabled = true
@@ -100,6 +103,7 @@ final class AppModel: ObservableObject {
             let mc = msg.mc.map { " • MC \($0)" } ?? ""
             statusText = "Connected to \(connectedName)\(mc)"
             lastEvent = ""
+            AppLog.add("hello from \(connectedName)\(mc)")
 
         case "burst":
             // A burst is raised to the level of the strongest active constant,
@@ -117,6 +121,7 @@ final class AppModel: ObservableObject {
                 constants[id] = msg.intensity ?? 0
                 applyConstants()
                 lastEvent = "≈ \(id) • \(Int(constants.values.max() ?? 0))%"
+                AppLog.add("constant \(id) = \(Int(msg.intensity ?? 0))%")
             }
 
         case "constant_end":

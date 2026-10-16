@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var model: AppModel
+    @State private var showLog = false
 
     var body: some View {
         VStack(spacing: 16) {
@@ -20,6 +21,7 @@ struct ContentView: View {
         .padding(20)
         .background(Color.black.ignoresSafeArea())
         .preferredColorScheme(.dark)
+        .sheet(isPresented: $showLog) { LogView() }
     }
 
     private var statusHeader: some View {
@@ -134,11 +136,16 @@ struct ContentView: View {
     @ViewBuilder
     private var footer: some View {
         VStack(spacing: 6) {
-            Toggle(isOn: $model.hapticsMuted) {
-                Text("Mute vibrations (test mode)")
+            HStack(spacing: 12) {
+                Toggle(isOn: $model.hapticsMuted) {
+                    Text("Mute vibrations (test mode)")
+                        .font(.caption)
+                }
+                .tint(.gray)
+                Spacer(minLength: 8)
+                Button("Log") { showLog = true }
                     .font(.caption)
             }
-            .tint(.gray)
             .padding(.bottom, 2)
 
             if !model.lastEvent.isEmpty {
@@ -150,6 +157,37 @@ struct ContentView: View {
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
+        }
+    }
+}
+
+/// Shows the persisted connection log (also survives crashes/kills).
+private struct LogView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var text = AppLog.shared.text()
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                Text(text)
+                    .font(.caption2.monospaced())
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+            }
+            .navigationTitle("Connection log")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Clear") {
+                        AppLog.shared.clear()
+                        text = AppLog.shared.text()
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
         }
     }
 }
