@@ -88,7 +88,7 @@ final class LinkClient {
         _ = fcntl(sock, F_SETFL, O_NONBLOCK)
         let rc = withUnsafePointer(to: &sa) { ptr in
             ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sap in
-                connect(sock, sap, socklen_t(MemoryLayout<sockaddr_in>.size))
+                Darwin.connect(sock, sap, socklen_t(MemoryLayout<sockaddr_in>.size))
             }
         }
         var connected = false

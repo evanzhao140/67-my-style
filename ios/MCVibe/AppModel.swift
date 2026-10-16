@@ -10,6 +10,21 @@ final class AppModel: ObservableObject {
     @Published var manualInput = ""
     @Published var lastEvent = ""
 
+    enum Transport: String {
+        case wifi
+        case bluetooth
+    }
+
+    @Published var transport: Transport = .wifi {
+        didSet {
+            guard transport != oldValue else { return }
+            UserDefaults.standard.set(transport.rawValue, forKey: "transport")
+            if phase != .idle {
+                disconnect()
+            }
+        }
+    }
+
     /// Test switch: when on, incoming events are still shown but nothing vibrates.
     /// Persisted so it survives relaunches.
     @Published var hapticsMuted: Bool = false {
@@ -24,6 +39,7 @@ final class AppModel: ObservableObject {
     }
 
     private let link = LinkClient()
+    private let bluetooth = BluetoothLink()
     private let discovery = Discovery()
     private let haptics = HapticsEngine.shared
     private var constants: [String: Double] = [:]
@@ -32,12 +48,19 @@ final class AppModel: ObservableObject {
     init() {
         manualInput = UserDefaults.standard.string(forKey: "lastHostInput") ?? ""
         hapticsMuted = UserDefaults.standard.bool(forKey: "hapticsMuted")
-        AppLog.add("app launched (v2)")
+        transport = Transport(rawValue: UserDefaults.standard.string(forKey: "transport") ?? "") ?? .wifi
+        AppLog.add("app launched (v3)")
 
         link.onPhase = { [weak self] phase, detail in
             Task { @MainActor in self?.applyPhase(phase, detail) }
         }
         link.onMessage = { [weak self] msg in
+            Task { @MainActor in self?.handle(msg) }
+        }
+        bluetooth.onPhase = { [weak self] phase, detail in
+            Task { @MainActor in self?.applyPhase(phase, detail) }
+        }
+        bluetooth.onMessage = { [weak self] msg in
             Task { @MainActor in self?.handle(msg) }
         }
         discovery.onHosts = { [weak self] hosts in
@@ -54,10 +77,26 @@ final class AppModel: ObservableObject {
     }
 
     func connect(host: String, port: UInt16) {
+        if transport == .bluetooth {
+            connectBluetooth()
+            return
+        }
+        stopInactiveTransports(active: .wifi)
         UserDefaults.standard.set(host, forKey: "lastHost")
         UserDefaults.standard.set(Int(port), forKey: "lastPort")
         AppLog.add("connect to \(host):\(port)")
         link.connect(host: host, port: port)
+    }
+
+    func connectBluetooth() {
+        stopInactiveTransports(active: .bluetooth)
+        AppLog.add("connect over bluetooth")
+        bluetooth.connect(host: "", port: 0)
+    }
+
+    private func stopInactiveTransports(active: Transport) {
+        if active != .wifi { link.disconnect() }
+        if active != .bluetooth { bluetooth.disconnect() }
     }
 
     func connectManual() {
@@ -74,6 +113,7 @@ final class AppModel: ObservableObject {
 
     func disconnect() {
         link.disconnect()
+        bluetooth.disconnect()
     }
 
     func toggleLock() {

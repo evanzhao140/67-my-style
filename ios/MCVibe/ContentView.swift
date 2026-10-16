@@ -53,7 +53,15 @@ struct ContentView: View {
                 .buttonStyle(.bordered)
         } else {
             VStack(spacing: 12) {
-                if model.hosts.isEmpty {
+                Picker("Connection", selection: $model.transport) {
+                    Text("Wi‑Fi").tag(AppModel.Transport.wifi)
+                    Text("Bluetooth").tag(AppModel.Transport.bluetooth)
+                }
+                .pickerStyle(.segmented)
+
+                if model.transport == .bluetooth {
+                    bluetoothConnect
+                } else if model.hosts.isEmpty {
                     HStack(spacing: 8) {
                         ProgressView().controlSize(.small)
                         Text("Looking for your PC on Wi‑Fi…")
@@ -81,18 +89,36 @@ struct ContentView: View {
                     }
                 }
 
-                HStack(spacing: 8) {
-                    TextField("or type PC IP, e.g. 192.168.1.20", text: $model.manualInput)
-                        .textFieldStyle(.roundedBorder)
-                        .keyboardType(.numbersAndPunctuation)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                    Button("Connect") { model.connectManual() }
-                        .buttonStyle(.bordered)
-                        .disabled(model.manualInput.trimmingCharacters(in: .whitespaces).isEmpty)
+                if model.transport == .wifi {
+                    HStack(spacing: 8) {
+                        TextField("or type PC IP, e.g. 192.168.1.20", text: $model.manualInput)
+                            .textFieldStyle(.roundedBorder)
+                            .keyboardType(.numbersAndPunctuation)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                        Button("Connect") { model.connectManual() }
+                            .buttonStyle(.bordered)
+                            .disabled(model.manualInput.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
                 }
             }
         }
+    }
+
+    /// Bluetooth mode: the phone scans for the MCVibeBridge app on the PC.
+    @ViewBuilder
+    private var bluetoothConnect: some View {
+        VStack(spacing: 10) {
+            Text("📶 📱")
+                .font(.largeTitle)
+            Text("1. Start Minecraft with the mod\n2. Run MCVibeBridge on your PC\n3. Tap the button below")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Button("Connect over Bluetooth") { model.connectBluetooth() }
+                .buttonStyle(.borderedProminent)
+        }
+        .padding(.vertical, 6)
     }
 
     private var lockButton: some View {
