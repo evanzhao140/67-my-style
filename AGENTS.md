@@ -19,12 +19,14 @@ Fabric mod ("Plant API") + iPhone companion app ("MCVibe"). Host PC: Windows.
 ## Windows bridge (Bluetooth path)
 - Source: `bridge/` (C# / .NET 10, TFM `net10.0-windows10.0.26100.0`).
 - Build: `cd bridge && dotnet publish -c Release -o publish` → `publish\PlantBridge.exe`; run: `bridge\run-bridge.bat`.
+- A **Desktop shortcut "Plant Bridge"** launches `bridge\run-bridge.bat` — keep it valid (recreate if deleted).
 - Bridges the mod's TCP stream (127.0.0.1:25666) → BLE notifications
   (service `9F2A7C44-8B31-4E6D-A5C2-7D0E9F1B3A66`, characteristic `...-3A67`; 20-byte chunked frames, header byte = (index<<1)|last).
 - The mod re-sends the full active-constant set every ~2 s (`{"type":"constants","active":{...}}`) and the bridge replays the last such line to a newly subscribing phone, so phone state converges within ~2 s even after a missed one-shot message or a late connect.
 
 ## CI & debugging notes
 - Repo: `github.com/evanzhao140/67-my-style` (public).
+- **After every green build (routine): deliver the IPA to the user.** Run `python tools\fetch-ipa.py` — it saves the newest `plantapi-ipa` artifact as `%USERPROFILE%\Downloads\ozok.ipa` (always this exact name, overwrite each time; the user sideloads that file with Sideloadly). It reuses the git credential-store token (`git credential fill`); unauthenticated artifact downloads return 401.
 - `git push` from the PC exits non-zero but succeeds — verify with `git ls-remote origin refs/heads/main`.
 - Failed iOS builds grep their errors into branch `build-log-out` → `build-log.txt` (read via the contents API; raw.githubusercontent can serve stale CDN cache).
 - Crash symbolication: `.github/workflows/symbolize.yml` → branch `symbols-out` → `symbols.txt`.
