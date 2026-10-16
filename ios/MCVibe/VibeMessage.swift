@@ -1,6 +1,6 @@
 import Foundation
 
-/// One newline-delimited JSON message from the MCVibe mod.
+/// One newline-delimited JSON message from the Plant API mod.
 struct VibeMessage: Decodable {
     let type: String
     let id: String?

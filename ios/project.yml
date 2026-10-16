@@ -1,6 +1,6 @@
 name: MCVibe
 options:
-  bundleIdPrefix: com.mcvibe
+  bundleIdPrefix: com.plantapi
   deploymentTarget:
     iOS: "17.0"
   createIntermediateGroups: true
@@ -19,7 +19,7 @@ targets:
           - Info.plist
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.mcvibe.app
+        PRODUCT_BUNDLE_IDENTIFIER: com.plantapi.app
         PRODUCT_NAME: MCVibe
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: MCVibe/Info.plist

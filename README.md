@@ -3,7 +3,7 @@
 Two pieces that work together:
 
 - **`mod/`** — a small Fabric mod called **Plant API** that runs a local helper service and turns Minecraft moments into vibration events.
-- **`ios/`** — **MCVibe**, a tiny iPhone app that connects over Wi-Fi (no Bluetooth) and vibrates on those events.
+- **`ios/`** — **MCVibe**, a tiny iPhone app that connects over Wi-Fi or Bluetooth and vibrates on those events.
 
 Your phone buzzes on ~65 different events (taking damage, breaking ore, creeper fusing, advancements, boss kills...) and hums constantly while conditions are active (status effects, low health, low air, darkness...). Every event has an intensity slider from 0 to 100 — **0 disables it**.
 
@@ -35,18 +35,20 @@ The same values live in `config/plantapi.json` if you prefer editing text.
 
 1. Push this repo to GitHub (public or private, both work — Actions minutes are free for public repos).
 2. Go to **Actions → build → Run workflow** (it also runs automatically on push).
-3. When both jobs finish, open the workflow run and download the **MCVibe-ipa** artifact.
+3. When both jobs finish, open the workflow run and download the **plantapi-ipa** artifact.
 4. Sideload it from Windows with [Sideloadly](https://sideloadly.io/) (or AltStore):
-   - Connect the iPhone (or use Wi-Fi sideloading), drag `MCVibe.ipa` in, enter your free Apple ID, start.
+   - Connect the iPhone (or use Wi-Fi sideloading), drag `plantapi-unsigned.ipa` in, enter your free Apple ID, start.
    - Trust the developer profile on the phone: **Settings → General → VPN & Device Management**.
    - Note: with a free Apple ID the app expires after **7 days**; just sideload again.
 
 ## 3. Pair and play
 
-1. Phone and PC on the **same Wi-Fi/network**.
+1. Phone and PC on the **same Wi-Fi/network** (or skip Wi-Fi and use Bluetooth below).
 2. Open MCVibe — your PC appears in the list (the mod answers UDP discovery on port 25667). If it doesn't, type the PC's IP manually.
 3. Tap the PC, then tap **Lock**. The app stays awake while connected.
 4. Play. Vibration happens only while the app is in the foreground.
+
+**Bluetooth (no same network needed):** run `bridge\run-bridge.bat` on the PC (see `bridge/README.md`), then in the app open the **Bluetooth** tab and tap **Connect over Bluetooth**.
 
 **Firewall:** the first time you launch Minecraft after installing the mod, Windows will ask — allow `java.exe` on **Private networks** (or manually allow inbound **TCP 25666** and **UDP 25667**). Phone hotspots / networks with client isolation can block discovery; the manual IP entry still works if you can ping the PC.
 
@@ -59,7 +61,8 @@ mod/                  Fabric mod (Plant API)
   src/main/java/com/plantapi/...
 ios/                  iOS app (MCVibe)
   project.yml         XcodeGen project (CI generates the .xcodeproj)
-.github/workflows/    build.yml -> mod jar + unsigned MCVibe.ipa artifacts
+bridge/               Windows helper (Plant Bridge) -> relays events to the phone over Bluetooth
+.github/workflows/    build.yml -> mod jar + unsigned plantapi-unsigned.ipa artifacts
 docs/ACTIONS.md       full list of every vibration id and its defaults
 ```
 

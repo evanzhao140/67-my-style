@@ -7,15 +7,15 @@ using Windows.Devices.Bluetooth;
 using Windows.Devices.Bluetooth.GenericAttributeProfile;
 using Windows.Security.Cryptography;
 
-/// MCVibe Bridge: connects to the Minecraft mod's local TCP server
+/// Plant Bridge: connects to the Plant API local TCP server
 /// (127.0.0.1:25666) and re-broadcasts every event line to the phone
 /// over Bluetooth LE (GATT notifications, 20-byte chunked frames).
 ///
-/// Run this on the PC while playing. Keep the window open.
+/// Run this on the PC. Keep the window open.
 class Program
 {
-    static readonly Guid ServiceUuid = Guid.Parse("6D637669-6265-4D43-5649-424500000001");
-    static readonly Guid CharUuid = Guid.Parse("6D637669-6265-4D43-5649-424500000002");
+    static readonly Guid ServiceUuid = Guid.Parse("9F2A7C44-8B31-4E6D-A5C2-7D0E9F1B3A66");
+    static readonly Guid CharUuid = Guid.Parse("9F2A7C44-8B31-4E6D-A5C2-7D0E9F1B3A67");
 
     static GattLocalCharacteristic EventChar;
     static volatile bool HaveSubscriber = false;
@@ -25,8 +25,8 @@ class Program
     static async Task<int> Main()
     {
         Console.OutputEncoding = Encoding.UTF8;
-        Console.WriteLine("MCVibe Bridge — Minecraft events -> Bluetooth LE");
-        Console.WriteLine("------------------------------------------------");
+        Console.WriteLine("Plant Bridge - local events -> Bluetooth LE");
+        Console.WriteLine("-------------------------------------------");
 
         var result = await GattServiceProvider.CreateAsync(ServiceUuid);
         if (result.Error != BluetoothError.Success)
@@ -41,7 +41,7 @@ class Program
         var charParams = new GattLocalCharacteristicParameters
         {
             CharacteristicProperties = GattCharacteristicProperties.Notify,
-            UserDescription = "MCVibe events",
+            UserDescription = "Plant API events",
         };
         var charResult = await provider.Service.CreateCharacteristicAsync(CharUuid, charParams);
         if (charResult.Error != BluetoothError.Success)
@@ -66,13 +66,13 @@ class Program
             IsConnectable = true,
             IsDiscoverable = true,
         });
-        Console.WriteLine("BLE ready — waiting for the phone (select Bluetooth in the app and connect).");
+        Console.WriteLine("BLE ready - waiting for the phone (select Bluetooth in the app and connect).");
 
         _ = Task.Run(TcpLoop);
 
         Console.WriteLine();
-        Console.WriteLine("Waiting for the game (start Minecraft with the mod) ...");
-        Console.WriteLine("Keep this window open while playing. Ctrl+C to exit.");
+        Console.WriteLine("Waiting for the local service on 127.0.0.1:25666 ...");
+        Console.WriteLine("Keep this window open. Ctrl+C to exit.");
         await Task.Delay(Timeout.Infinite);
         return 0;
     }
@@ -85,7 +85,7 @@ class Program
             {
                 using var client = new TcpClient();
                 await client.ConnectAsync("127.0.0.1", 25666);
-                Console.WriteLine(">> Game connected (mod found).");
+                Console.WriteLine(">> Source connected.");
                 using var stream = client.GetStream();
                 using var reader = new StreamReader(stream, Encoding.UTF8);
                 while (true)
@@ -95,11 +95,11 @@ class Program
                     if (line.Length == 0 || line.Length > 900) continue;
                     await SendLineToPhone(line);
                 }
-                Console.WriteLine(">> Game closed the connection.");
+                Console.WriteLine(">> Source closed the connection.");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($">> Waiting for the game (mod not running yet): {ex.Message}");
+                Console.WriteLine($">> Waiting for the local service: {ex.Message}");
             }
             await Task.Delay(2000);
         }
@@ -126,7 +126,7 @@ class Program
             SentChunks += chunks;
             if (SentMessages % 25 == 1)
             {
-                Console.WriteLine($">> Sent {SentMessages} events ({SentChunks} BLE chunks). Last: {Trim(line, 60)}");
+                Console.WriteLine($">> Forwarded {SentMessages} events ({SentChunks} BLE chunks). Last: {Trim(line, 60)}");
             }
         }
         catch (Exception ex)

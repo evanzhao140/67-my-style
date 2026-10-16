@@ -14,7 +14,7 @@ DerivedData/
 .DS_Store
 Thumbs.db
 
-# MCVibe Bridge (C# helper)
+# Plant Bridge (C# helper)
 bridge/bin/
 bridge/obj/
 bridge/publish/

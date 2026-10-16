@@ -23,9 +23,9 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>MCVibe finds your Minecraft PC on the local network and receives event messages from the MCVibe mod so your phone can vibrate for in-game events.</string>
+	<string>MCVibe connects to your PC on the local network to pick up event messages and vibrate for them.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>MCVibe uses Bluetooth to connect directly to your PC and vibrate for in-game events.</string>
+	<string>MCVibe connects to your PC over Bluetooth to pick up event messages and vibrate for them.</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>

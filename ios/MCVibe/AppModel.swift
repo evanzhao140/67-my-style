@@ -26,10 +26,10 @@ final class AppModel: ObservableObject {
     }
 
     /// Test switch: when on, incoming events are still shown but nothing vibrates.
-    /// Persisted so it survives relaunches.
+    /// Session-only on purpose: a persisted mute once made "no vibration" very
+    /// hard to diagnose, so it always starts OFF after a relaunch.
     @Published var hapticsMuted: Bool = false {
         didSet {
-            UserDefaults.standard.set(hapticsMuted, forKey: "hapticsMuted")
             if hapticsMuted {
                 haptics.setConstant(0)
             } else {
@@ -47,9 +47,8 @@ final class AppModel: ObservableObject {
 
     init() {
         manualInput = UserDefaults.standard.string(forKey: "lastHostInput") ?? ""
-        hapticsMuted = UserDefaults.standard.bool(forKey: "hapticsMuted")
         transport = Transport(rawValue: UserDefaults.standard.string(forKey: "transport") ?? "") ?? .wifi
-        AppLog.add("app launched (v3)")
+        AppLog.add("app launched (v4)")
 
         link.onPhase = { [weak self] phase, detail in
             Task { @MainActor in self?.applyPhase(phase, detail) }
@@ -116,6 +115,14 @@ final class AppModel: ObservableObject {
         bluetooth.disconnect()
     }
 
+    /// Plays a burst directly on the phone — no network involved. Use this to
+    /// verify that phone-side haptics work at all.
+    func testVibration() {
+        AppLog.add("in-app test vibration")
+        haptics.burst(intensity: 80, durationMs: 240, pulses: 2)
+        lastEvent = "⚡ in-app test • 80%"
+    }
+
     func toggleLock() {
         locked.toggle()
         UIApplication.shared.isIdleTimerDisabled = locked || phase == .connected
@@ -151,10 +158,13 @@ final class AppModel: ObservableObject {
             let floor = constants.values.max() ?? 0
             let raw = max(msg.intensity ?? 50, floor)
             let level = raw.isFinite ? raw : floor
-            if !hapticsMuted {
+            if hapticsMuted {
+                AppLog.add("burst suppressed (muted)")
+                lastEvent = "⚡ \(msg.id ?? "burst") • \(Int(level.rounded()))% (muted)"
+            } else {
                 haptics.burst(intensity: level, durationMs: msg.durationMs ?? 200, pulses: msg.pulses ?? 1)
+                lastEvent = "⚡ \(msg.id ?? "burst") • \(Int(level.rounded()))%"
             }
-            lastEvent = "⚡ \(msg.id ?? "burst") • \(Int(level.rounded()))%"
 
         case "constant":
             if let id = msg.id {

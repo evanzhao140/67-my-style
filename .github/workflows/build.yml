@@ -57,7 +57,7 @@ jobs:
             -scheme MCVibe \
             -configuration Release \
             -destination 'generic/platform=iOS' \
-            -archivePath "$RUNNER_TEMP/MCVibe.xcarchive" \
+            -archivePath "$RUNNER_TEMP/plantapi.xcarchive" \
             archive \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
@@ -85,13 +85,13 @@ jobs:
       - name: Package IPA
         run: |
           mkdir -p "$RUNNER_TEMP/Payload"
-          cp -R "$RUNNER_TEMP/MCVibe.xcarchive/Products/Applications/MCVibe.app" "$RUNNER_TEMP/Payload/"
+          cp -R "$RUNNER_TEMP/plantapi.xcarchive/Products/Applications/MCVibe.app" "$RUNNER_TEMP/Payload/"
           cd "$RUNNER_TEMP"
-          zip -qry MCVibe.ipa Payload
+          zip -qry plantapi-unsigned.ipa Payload
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: MCVibe-ipa
-          path: ${{ runner.temp }}/MCVibe.ipa
+          name: plantapi-ipa
+          path: ${{ runner.temp }}/plantapi-unsigned.ipa
           if-no-files-found: error

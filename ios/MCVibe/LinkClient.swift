@@ -17,7 +17,7 @@ final class LinkClient {
     var onPhase: ((Phase, String) -> Void)?
     var onMessage: ((VibeMessage) -> Void)?
 
-    private let queue = DispatchQueue(label: "mcvibe.link")
+    private let queue = DispatchQueue(label: "plantapi.link")
     private var fd: Int32 = -1
     private var buffer = Data()
     private var host = ""
@@ -128,7 +128,7 @@ final class LinkClient {
         buffer.removeAll()
         AppLog.add("tcp connected")
         emit(.connected, "Connected")
-        sendRawLocked(#"{"type":"hello","proto":1,"client":"MCVibe iOS"}"# + "\n")
+        sendRawLocked(#"{"type":"hello","proto":1,"client":"plantapi-ios"}"# + "\n")
         recvStep(sock: sock, myGen: gen)
     }
 

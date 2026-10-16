@@ -1,8 +1,8 @@
 @echo off
 cd /d "%~dp0"
-echo Starting MCVibe Bridge...
-if exist "publish\MCVibeBridge.exe" (
-  "publish\MCVibeBridge.exe"
+echo Starting Plant Bridge...
+if exist "publish\PlantBridge.exe" (
+  "publish\PlantBridge.exe"
 ) else (
   dotnet run -c Release
 )

@@ -1,7 +1,7 @@
 import Foundation
 import CoreBluetooth
 
-/// Connects to the PC over Bluetooth Low Energy. The MCVibeBridge app running
+/// Connects to the PC over Bluetooth Low Energy. The Plant Bridge app running
 /// on the PC advertises a GATT service and streams game events as
 /// notifications, chunked into 20-byte frames and reassembled here.
 ///
@@ -12,10 +12,10 @@ final class BluetoothLink: NSObject {
     var onPhase: ((Phase, String) -> Void)?
     var onMessage: ((VibeMessage) -> Void)?
 
-    private static let serviceUUID = CBUUID(string: "6D637669-6265-4D43-5649-424500000001")
-    private static let eventUUID = CBUUID(string: "6D637669-6265-4D43-5649-424500000002")
+    private static let serviceUUID = CBUUID(string: "9F2A7C44-8B31-4E6D-A5C2-7D0E9F1B3A66")
+    private static let eventUUID = CBUUID(string: "9F2A7C44-8B31-4E6D-A5C2-7D0E9F1B3A67")
 
-    private let queue = DispatchQueue(label: "mcvibe.ble")
+    private let queue = DispatchQueue(label: "plantapi.ble")
     private var central: CBCentralManager?
     private var target: CBPeripheral?
     private var wantsConnection = false

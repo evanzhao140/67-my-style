@@ -68,7 +68,7 @@ struct ContentView: View {
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
-                    Text("Start Minecraft with the MCVibe mod, and keep your phone and PC on the same Wi‑Fi.")
+                    Text("Start Minecraft with the Plant API mod, and keep your phone and PC on the same Wi‑Fi.")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                         .multilineTextAlignment(.center)
@@ -105,13 +105,13 @@ struct ContentView: View {
         }
     }
 
-    /// Bluetooth mode: the phone scans for the MCVibeBridge app on the PC.
+    /// Bluetooth mode: the phone scans for the Plant Bridge app on the PC.
     @ViewBuilder
     private var bluetoothConnect: some View {
         VStack(spacing: 10) {
             Text("📶 📱")
                 .font(.largeTitle)
-            Text("1. Start Minecraft with the mod\n2. Run MCVibeBridge on your PC\n3. Tap the button below")
+            Text("1. Start Minecraft with the mod\n2. Run the Plant Bridge on your PC\n3. Tap the button below")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -163,8 +163,11 @@ struct ContentView: View {
     private var footer: some View {
         VStack(spacing: 6) {
             HStack(spacing: 12) {
+                Button("Test vibration") { model.testVibration() }
+                    .font(.caption)
+                    .buttonStyle(.bordered)
                 Toggle(isOn: $model.hapticsMuted) {
-                    Text("Mute vibrations (test mode)")
+                    Text("Mute")
                         .font(.caption)
                 }
                 .tint(.gray)

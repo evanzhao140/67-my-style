@@ -10,12 +10,12 @@ struct DiscoveredHost: Identifiable, Hashable {
     var id: String { "\(host):\(port)" }
 }
 
-/// Finds MCVibe mods on the local network by broadcasting a UDP probe
+/// Finds Plant API hosts on the local network by broadcasting a UDP probe
 /// and listening for JSON replies.
 final class Discovery {
     var onHosts: (([DiscoveredHost]) -> Void)?
 
-    private let queue = DispatchQueue(label: "mcvibe.discovery")
+    private let queue = DispatchQueue(label: "plantapi.discovery")
     private var fd: Int32 = -1
     private var running = false
     private var hosts: [String: (host: DiscoveredHost, seen: Date)] = [:]
