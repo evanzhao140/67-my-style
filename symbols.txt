@@ -1,0 +1,11 @@
+crash incident 61BAF87D-5560-44DC-A3C1-BBAE31B180AB
+slice_uuid 7e42e8c2-ba53-3075-9f93-928fc3bc95d0
+image base 0x100AA8000; offsets 88200 / 89144 / 90464(trap)
+
+================ b9eead81184872cfc7481147d2fe86f9e04a45f2 ================
+binary uuid: 737F4FB5-495C-34FF-9351-0CDE91013981
+-- atos --
+closure #1 in LinkClient.receiveLoop(on:) (in MCVibe) (LinkClient.swift:96)
+LinkClient.drainLines() (in MCVibe) (/<compiler-generated>:0)
+storeEnumTagSinglePayload for LinkClient.Phase (in MCVibe) (/<compiler-generated>:0)
+-- nearest symbols (nm -n) --
