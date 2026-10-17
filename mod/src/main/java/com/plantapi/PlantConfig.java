@@ -9,6 +9,7 @@ import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -65,6 +66,13 @@ public class PlantConfig {
 
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
+	/** Burst ids from older versions that no longer exist (purged from saved configs). */
+	private static final List<String> LEGACY_BURSTS = List.of(
+			"player_damaged", "damage_fall", "damage_explosion", "damage_fire", "damage_freeze",
+			"damage_drown", "damage_magic", "damage_lightning", "damage_sonic_boom", "damage_void",
+			"damage_starve", "damage_cactus", "damage_sweet_berry", "damage_thorns", "damage_sting",
+			"damage_projectile", "item_pickup");
+
 	public Burst burst(String id, int intensity, int durationMs, int pulses) {
 		Burst b = new Burst(intensity, durationMs, pulses);
 		bursts.put(id, b);
@@ -83,22 +91,9 @@ public class PlantConfig {
 		c.burst("critical_hit", 65, 120, 1);
 		c.burst("kill_entity", 65, 180, 1);
 		c.burst("kill_boss", 100, 600, 3);
-		c.burst("player_damaged", 65, 150, 1);
-		c.burst("damage_fall", 70, 250, 2);
-		c.burst("damage_explosion", 75, 300, 2);
-		c.burst("damage_fire", 65, 150, 1);
-		c.burst("damage_freeze", 65, 150, 1);
-		c.burst("damage_drown", 65, 200, 1);
-		c.burst("damage_magic", 65, 170, 1);
-		c.burst("damage_lightning", 90, 400, 3);
-		c.burst("damage_sonic_boom", 100, 500, 3);
-		c.burst("damage_void", 80, 350, 2);
-		c.burst("damage_starve", 65, 150, 1);
-		c.burst("damage_cactus", 65, 120, 1);
-		c.burst("damage_sweet_berry", 65, 100, 1);
-		c.burst("damage_thorns", 65, 120, 1);
-		c.burst("damage_sting", 65, 150, 1);
-		c.burst("damage_projectile", 65, 150, 1);
+		// Every damage source (fall, fire, mobs, void, cactus, ...) is wrapped
+		// into this one two-tap burst so a hit always reads the same way.
+		c.burst("damage", 75, 220, 2);
 		c.burst("shield_block", 65, 110, 1);
 		c.burst("totem_pop", 100, 700, 4);
 		c.burst("tool_break", 65, 220, 2);
@@ -119,7 +114,6 @@ public class PlantConfig {
 		c.burst("ore_break", 65, 150, 1);
 		c.burst("block_place", 65, 60, 1);
 		c.burst("container_open", 65, 70, 1);
-		c.burst("item_pickup", 65, 60, 1);
 		c.burst("valuable_pickup", 65, 180, 2);
 		c.burst("craft_item", 65, 100, 1);
 		c.burst("smelt_take", 65, 90, 1);
@@ -151,6 +145,14 @@ public class PlantConfig {
 		c.burst("eat_finish", 65, 120, 1);
 		c.burst("drink_potion", 65, 160, 1);
 		c.burst("bucket_use", 65, 60, 1);
+
+		// ---- Recurring moments (everyday triggers so there is always feedback) ----
+		c.burst("player_nearby", 70, 200, 2);   // another player comes within ~24 blocks
+		c.burst("mount", 65, 90, 1);            // boat / horse / minecart / anything rideable
+		c.burst("water_splash", 65, 120, 1);    // entering water after a fall
+		c.burst("storm_start", 75, 300, 2);     // a thunderstorm begins
+		c.burst("void_fall", 80, 350, 2);       // dropped below the world (servers teleport you back)
+		c.burst("item_drop", 65, 60, 1);        // dropped an item with Q
 
 		// ---- Chat ----
 		c.burst("chat_mention", 65, 250, 2);
@@ -210,7 +212,7 @@ public class PlantConfig {
 		c.constant("mining", 45, false, 0);
 		c.constant("falling_far", 45, true, 5);        // threshold: blocks fallen
 		c.constant("vehicle_speed", 45, true, 0.15);   // threshold: blocks/tick
-		c.constant("recent_damage", 45, false, 0);     // 5s after taking a hit
+		c.constant("recent_damage", 45, false, 0);     // 3s after taking a hit
 		c.constant("near_hostiles", 45, true, 3);      // threshold: hostile mob count within 16 blocks
 		c.constant("boss_nearby", 45, true, 64);       // threshold: distance in blocks
 		c.constant("raid_active", 45, false, 0);
@@ -250,6 +252,10 @@ public class PlantConfig {
 		// The ambient "in darkness" trigger was removed entirely; drop it from
 		// configs written by older versions.
 		cfg.constants.remove("in_darkness");
+
+		// The per-type damage bursts were merged into a single "damage" burst,
+		// and "item_pickup" was removed; drop both from older configs.
+		cfg.bursts.keySet().removeAll(LEGACY_BURSTS);
 
 		save(cfg);
 		return cfg;

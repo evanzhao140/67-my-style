@@ -48,7 +48,7 @@ final class AppModel: ObservableObject {
     init() {
         manualInput = UserDefaults.standard.string(forKey: "lastHostInput") ?? ""
         transport = Transport(rawValue: UserDefaults.standard.string(forKey: "transport") ?? "") ?? .wifi
-        AppLog.add("app launched (v4)")
+        AppLog.add("app launched (v5)")
 
         link.onPhase = { [weak self] phase, detail in
             Task { @MainActor in self?.applyPhase(phase, detail) }

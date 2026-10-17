@@ -16,7 +16,8 @@
 		"client.CraftTakeMixin",
 		"client.SmeltTakeMixin",
 		"client.TradeTakeMixin",
-		"client.ItemStackHurtMixin"
+		"client.ItemStackHurtMixin",
+		"client.LocalPlayerDropMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

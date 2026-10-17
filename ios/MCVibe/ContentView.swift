@@ -3,20 +3,22 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject var model: AppModel
     @State private var showLog = false
+    /// 0 = locked screen; 1...3 = unlock confirmation steps.
+    @State private var unlockStep = 0
 
     var body: some View {
         VStack(spacing: 16) {
             statusHeader
 
             if model.locked {
-                lockedPanel
+                lockedFlow
+                Spacer(minLength: 0)
             } else {
                 connectSection
                 lockButton
+                Spacer(minLength: 0)
+                footer
             }
-
-            Spacer(minLength: 0)
-            footer
         }
         .padding(20)
         .background(Color.black.ignoresSafeArea())
@@ -140,9 +142,22 @@ struct ContentView: View {
         .tint(.blue)
     }
 
+    /// Locked mode replaces everything else on screen, so the footer buttons
+    /// (test / mute / log) cannot be tapped while locked or while unlocking.
+    /// Unlocking takes three separate confirmations, so it can never happen
+    /// from a single pocket tap.
+    @ViewBuilder
+    private var lockedFlow: some View {
+        if unlockStep == 0 {
+            lockedPanel
+        } else {
+            unlockConfirm(step: unlockStep)
+        }
+    }
+
     private var lockedPanel: some View {
         Button {
-            model.toggleLock()
+            unlockStep = 1
         } label: {
             VStack(spacing: 10) {
                 Image(systemName: "lock.fill")
@@ -157,6 +172,46 @@ struct ContentView: View {
         }
         .buttonStyle(.borderedProminent)
         .tint(.red)
+    }
+
+    private func unlockConfirm(step: Int) -> some View {
+        let titles = ["Unlock controls?", "Are you sure?", "Really unlock now?"]
+        let details = [
+            "The connect and lock buttons will become tappable again.",
+            "Unlocking takes three confirmations to prevent accidental taps.",
+            "This is the last confirmation; the lock turns off right after."
+        ]
+        let index = min(max(step, 1), 3) - 1
+        return VStack(spacing: 18) {
+            Image(systemName: "lock.open.fill")
+                .font(.system(size: 40))
+                .foregroundStyle(.orange)
+            Text("Unlock \(step) of 3")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Text(titles[index])
+                .font(.title2.bold())
+                .multilineTextAlignment(.center)
+            Text(details[index])
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            if step < 3 {
+                Button("Continue") { unlockStep = step + 1 }
+                    .buttonStyle(.borderedProminent)
+            } else {
+                Button("Unlock controls") {
+                    unlockStep = 0
+                    model.toggleLock()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
+            }
+            Button("Cancel") { unlockStep = 0 }
+        }
+        .frame(maxWidth: .infinity, minHeight: 240)
+        .padding(16)
+        .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
     }
 
     @ViewBuilder

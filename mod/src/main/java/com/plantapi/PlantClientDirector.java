@@ -8,6 +8,7 @@ import net.minecraft.advancements.AdvancementHolder;
 import net.minecraft.advancements.AdvancementType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -21,7 +22,6 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.BossEvent;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.damagesource.DamageSource;
-import net.minecraft.world.damagesource.DamageTypes;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
@@ -254,6 +254,15 @@ public class PlantClientDirector {
 		emit(armor ? "armor_break" : "tool_break");
 	}
 
+	public static void onItemDrop() {
+		Minecraft client = Minecraft.getInstance();
+		if (client == null || client.player == null || PlantApiMod.server == null) return;
+		// Dropping items has no reliable server-side signal in multiplayer, so this
+		// one comes from the client in single-player too; the server director never
+		// emits item_drop, so there is no double burst.
+		emit("item_drop");
+	}
+
 	// ------------------------------------------------------------------
 	// Raid tracking (from the boss-bar packets the server sends us)
 	// ------------------------------------------------------------------
@@ -330,16 +339,17 @@ public class PlantClientDirector {
 		float drop = Math.max(0.0F, st.lastHealth - healthNow) + Math.max(0.0F, st.lastAbsorption - absorbNow);
 		DamageSource source = st.pendingDamageSource;
 		st.pendingDamageSource = null;
+		// All damage is wrapped into one two-tap "damage" burst (same ids the
+		// server-side director uses), including the health-drop fallback for
+		// servers that never send a damage event packet.
 		if (source != null && now - st.pendingDamageAt <= 400) {
 			if (now - st.totemAt > 400) {
-				double severity = clamp01(drop / Math.max(1.0F, p.getMaxHealth()));
 				st.lastDamageAt = now;
-				onDamaged(p, source, severity < 0.02 ? 0.1 : severity);
+				emit("damage");
 			}
 		} else if (drop > 0.01F && healthNow > 0.0F && now - st.totemAt > 400) {
 			st.lastDamageAt = now;
-			double severity = clamp01(drop / Math.max(1.0F, p.getMaxHealth()));
-			emitScaled("player_damaged", severity < 0.02 ? 0.1 : severity);
+			emit("damage");
 		}
 		st.lastHealth = healthNow;
 		st.lastAbsorption = absorbNow;
@@ -373,8 +383,29 @@ public class PlantClientDirector {
 
 		// landing
 		if (st.lastFallDistance > 4 && p.onGround() && !st.lastOnGround) emit("landed_from_fall");
+
+		// entering water with some fall speed = splash
+		boolean inWater = p.isInWater();
+		if (inWater && !st.wasInWater && st.lastFallDistance > 1.5) emit("water_splash");
+		st.wasInWater = inWater;
+
 		st.lastOnGround = p.onGround();
 		st.lastFallDistance = p.fallDistance;
+
+		// start riding a boat / horse / minecart / anything
+		boolean riding = p.isPassenger();
+		if (riding && !st.lastRiding) emit("mount");
+		st.lastRiding = riding;
+
+		// a thunderstorm begins
+		boolean thundering = p.level().isThundering();
+		if (thundering && !st.lastThundering) emit("storm_start");
+		st.lastThundering = thundering;
+
+		// fell below the world (servers teleport you back out)
+		boolean inVoid = p.getY() < p.level().getMinY() - 8;
+		if (inVoid && !st.inVoid) emit("void_fall");
+		st.inVoid = inVoid;
 
 		// xp and level
 		if (p.totalExperience > st.lastXpTotal) emit("xp_pickup");
@@ -450,6 +481,7 @@ public class PlantClientDirector {
 		}
 		if ((TICKS + stagger) % 20 == 0) {
 			scanHostiles(p, st);
+			scanPlayers(p, st);
 			scanBoss(p, st);
 			scanInventory(p, st);
 			scanDurability(p, st);
@@ -527,7 +559,7 @@ public class PlantClientDirector {
 			if (speed > c.threshold) st.desired.put("vehicle_speed", scaled(c, highBased(speed, c.threshold)));
 		}
 
-		if (enabled(cfg, "recent_damage") && now - st.lastDamageAt < 5000) {
+		if (enabled(cfg, "recent_damage") && now - st.lastDamageAt < 3000) {
 			st.desired.put("recent_damage", cfg.constants.get("recent_damage").intensity);
 		}
 
@@ -626,6 +658,23 @@ public class PlantClientDirector {
 		st.hostileCount = p.level().getEntitiesOfClass(Monster.class, p.getBoundingBox().inflate(16)).size();
 	}
 
+	/** Fires once when another player first comes within ~24 blocks (re-arms past ~28). */
+	private static void scanPlayers(LocalPlayer p, ClientState st) {
+		if (!(p.level() instanceof ClientLevel level)) return;
+		Set<UUID> withinFire = new HashSet<>();
+		Set<UUID> withinKeep = new HashSet<>();
+		for (AbstractClientPlayer other : level.players()) {
+			if (other == p) continue;
+			double dist = p.distanceTo(other);
+			if (dist <= 24) withinFire.add(other.getUUID());
+			if (dist <= 28) withinKeep.add(other.getUUID());
+		}
+		for (UUID id : withinFire) {
+			if (st.nearbyPlayers.add(id)) emit("player_nearby");
+		}
+		st.nearbyPlayers.retainAll(withinKeep);
+	}
+
 	private static void scanBoss(LocalPlayer p, ClientState st) {
 		double nearest = Double.MAX_VALUE;
 		nearest = Math.min(nearest, nearestDistance(p, EnderDragon.class, 160));
@@ -656,9 +705,8 @@ public class PlantClientDirector {
 		}
 		for (Map.Entry<Item, Integer> e : counts.entrySet()) {
 			int previous = st.lastItems.getOrDefault(e.getKey(), 0);
-			if (e.getValue() > previous) {
-				if (VALUABLES.contains(e.getKey())) emit("valuable_pickup");
-				else emit("item_pickup");
+			if (e.getValue() > previous && VALUABLES.contains(e.getKey())) {
+				emit("valuable_pickup");
 			}
 		}
 		st.lastItems = counts;
@@ -692,29 +740,6 @@ public class PlantClientDirector {
 	// Damage / items
 	// ------------------------------------------------------------------
 
-	private static void onDamaged(LocalPlayer p, DamageSource source, double severity) {
-		if (source.is(DamageTypes.FALL)) emitScaled("damage_fall", severity * 1.25);
-		else if (source.is(DamageTypes.EXPLOSION) || source.is(DamageTypes.PLAYER_EXPLOSION)) emitScaled("damage_explosion", severity);
-		else if (source.is(DamageTypes.IN_FIRE) || source.is(DamageTypes.ON_FIRE) || source.is(DamageTypes.CAMPFIRE)
-				|| source.is(DamageTypes.LAVA) || source.is(DamageTypes.HOT_FLOOR) || source.is(DamageTypes.SULFUR_CUBE_HOT)) emit("damage_fire");
-		else if (source.is(DamageTypes.FREEZE)) emit("damage_freeze");
-		else if (source.is(DamageTypes.DROWN)) emit("damage_drown");
-		else if (source.is(DamageTypes.LIGHTNING_BOLT)) emit("damage_lightning");
-		else if (source.is(DamageTypes.SONIC_BOOM)) emit("damage_sonic_boom");
-		else if (source.is(DamageTypes.FELL_OUT_OF_WORLD)) emit("damage_void");
-		else if (source.is(DamageTypes.STARVE)) emit("damage_starve");
-		else if (source.is(DamageTypes.CACTUS)) emit("damage_cactus");
-		else if (source.is(DamageTypes.SWEET_BERRY_BUSH)) emit("damage_sweet_berry");
-		else if (source.is(DamageTypes.THORNS)) emit("damage_thorns");
-		else if (source.is(DamageTypes.STING)) emit("damage_sting");
-		else if (source.is(DamageTypes.MAGIC) || source.is(DamageTypes.INDIRECT_MAGIC)
-				|| source.is(DamageTypes.WITHER) || source.is(DamageTypes.DRAGON_BREATH)) emit("damage_magic");
-		else if (source.is(DamageTypes.ARROW) || source.is(DamageTypes.MOB_PROJECTILE) || source.is(DamageTypes.SPIT)
-				|| source.is(DamageTypes.FIREBALL) || source.is(DamageTypes.UNATTRIBUTED_FIREBALL) || source.is(DamageTypes.WITHER_SKULL)
-				|| source.is(DamageTypes.THROWN) || source.is(DamageTypes.FIREWORKS) || source.is(DamageTypes.WIND_CHARGE)) emit("damage_projectile");
-		else emitScaled("player_damaged", severity);
-	}
-
 	private static boolean isCritical(LocalPlayer p) {
 		return p.fallDistance > 0.0 && !p.onGround() && !p.onClimbable() && !p.isInWater()
 				&& !p.hasEffect(MobEffects.BLINDNESS) && !p.isPassenger() && !p.isSprinting();
@@ -738,15 +763,6 @@ public class PlantClientDirector {
 		PlantConfig.Burst b = PlantApiMod.config.bursts.get(id);
 		if (b == null || b.intensity <= 0) return;
 		net.burst(id, b.intensity, b.durationMs, b.pulses);
-	}
-
-	private static void emitScaled(String id, double severity) {
-		PlantServer net = PlantApiMod.server;
-		if (net == null) return;
-		PlantConfig.Burst b = PlantApiMod.config.bursts.get(id);
-		if (b == null || b.intensity <= 0) return;
-		int value = Math.max(2, (int) Math.round(b.intensity * clamp01(severity)));
-		net.burst(id, value, b.durationMs, b.pulses);
 	}
 
 	private static boolean enabled(PlantConfig cfg, String id) {
@@ -801,6 +817,11 @@ public class PlantClientDirector {
 		ResourceKey<Level> lastDimension;
 		double lastFallDistance;
 		boolean lastOnGround;
+		boolean wasInWater;
+		boolean lastRiding;
+		boolean lastThundering;
+		boolean inVoid;
+		Set<UUID> nearbyPlayers = new HashSet<>();
 		int lastXpTotal, lastXpLevel;
 		Class<?> lastMenuClass;
 		boolean wasUsingItem;
@@ -841,6 +862,10 @@ public class PlantClientDirector {
 			lastDimension = p.level().dimension();
 			lastFallDistance = p.fallDistance;
 			lastOnGround = p.onGround();
+			wasInWater = p.isInWater();
+			lastRiding = p.isPassenger();
+			lastThundering = p.level().isThundering();
+			inVoid = p.getY() < p.level().getMinY() - 8;
 			lastXpTotal = p.totalExperience;
 			lastXpLevel = p.experienceLevel;
 			lastMenuClass = p.containerMenu.getClass();
