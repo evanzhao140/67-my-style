@@ -154,6 +154,12 @@ public class PlantConfig {
 		c.burst("void_fall", 80, 350, 2);       // dropped below the world (servers teleport you back)
 		c.burst("item_drop", 65, 60, 1);        // dropped an item with Q
 
+		// ---- Mistake / danger feedback ----
+		c.burst("low_health_alert", 85, 400, 3);  // health first drops below 25% (re-arms above 40%)
+		c.burst("tnt_primed", 70, 200, 2);        // TNT was lit near you
+		c.burst("explosion_near", 80, 300, 2);    // something exploded within ~16 blocks
+		c.burst("shield_disabled", 70, 200, 2);   // an axe knocked your shield down
+
 		// ---- Chat ----
 		c.burst("chat_mention", 65, 250, 2);
 
@@ -212,12 +218,24 @@ public class PlantConfig {
 		c.constant("mining", 45, false, 0);
 		c.constant("falling_far", 45, true, 5);        // threshold: blocks fallen
 		c.constant("vehicle_speed", 45, true, 0.15);   // threshold: blocks/tick
-		c.constant("recent_damage", 45, false, 0);     // 3s after taking a hit
+		c.constant("recent_damage", 45, false, 0);     // brief 0.5s buzz right after taking a hit
 		c.constant("near_hostiles", 45, true, 3);      // threshold: hostile mob count within 16 blocks
 		c.constant("boss_nearby", 45, true, 64);       // threshold: distance in blocks
 		c.constant("raid_active", 45, false, 0);
 		c.constant("low_tool_durability", 45, true, 15);   // threshold: remaining durability percent
 		c.constant("low_armor_durability", 45, true, 15);  // threshold: remaining durability percent
+
+		// ---- Constants: more continuous conditions ----
+		c.constant("using_item", 45, false, 0);        // eating / drinking / drawing a bow / using anything
+		c.constant("shield_up", 45, false, 0);         // shield raised and actively blocking
+		c.constant("falling", 45, true, 0.4);          // threshold: fall speed in blocks/tick
+		c.constant("in_water", 45, false, 0);          // any water contact, not just submerged
+		c.constant("in_nether", 45, false, 0);
+		c.constant("in_end", 45, false, 0);
+		c.constant("creeper_fusing", 45, false, 0);    // a nearby creeper or TNT is about to explode
+		c.constant("near_lava", 45, false, 0);         // lava within ~4 blocks
+		c.constant("in_powder_snow", 45, false, 0);
+		c.constant("suffocating", 45, false, 0);       // head stuck inside a block
 
 		return c;
 	}

@@ -22,6 +22,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.damagesource.DamageSource;
@@ -34,6 +35,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.entity.boss.wither.WitherBoss;
+import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.monster.warden.Warden;
@@ -338,6 +340,7 @@ public class PlantDirector {
 		if ((TICKS + stagger) % 20 == 0) {
 			scanHostiles(p, st);
 			scanPlayers(p, st);
+			scanLava(p, st);
 			scanBoss(p, st);
 			scanRaid(p, st);
 			scanInventory(p, st);
@@ -417,7 +420,7 @@ public class PlantDirector {
 			if (speed > c.threshold) st.desired.put("vehicle_speed", scaled(c, highBased(speed, c.threshold)));
 		}
 
-		if (enabled(cfg, "recent_damage") && now - st.lastDamageAt < 3000) {
+		if (enabled(cfg, "recent_damage") && now - st.lastDamageAt < 500) {
 			st.desired.put("recent_damage", cfg.constants.get("recent_damage").intensity);
 		}
 
@@ -438,6 +441,54 @@ public class PlantDirector {
 		c = cfg.constants.get("low_armor_durability");
 		if (c != null && c.intensity > 0 && st.armorDurability < c.threshold) {
 			st.desired.put("low_armor_durability", scaled(c, zeroBased(st.armorDurability, c.threshold)));
+		}
+
+		// ---- More continuous conditions ----
+		if (enabled(cfg, "using_item") && p.isUsingItem()) {
+			st.desired.put("using_item", cfg.constants.get("using_item").intensity);
+		}
+		if (enabled(cfg, "shield_up") && p.isBlocking()) {
+			st.desired.put("shield_up", cfg.constants.get("shield_up").intensity);
+		}
+		if (enabled(cfg, "in_water") && p.isInWater()) {
+			st.desired.put("in_water", cfg.constants.get("in_water").intensity);
+		}
+		if (enabled(cfg, "in_powder_snow") && p.isInPowderSnow) {
+			st.desired.put("in_powder_snow", cfg.constants.get("in_powder_snow").intensity);
+		}
+		if (enabled(cfg, "suffocating") && p.isInWall()) {
+			st.desired.put("suffocating", cfg.constants.get("suffocating").intensity);
+		}
+		if (enabled(cfg, "creeper_fusing") && (!st.fusedCreepers.isEmpty() || !st.fusedTnt.isEmpty())) {
+			st.desired.put("creeper_fusing", cfg.constants.get("creeper_fusing").intensity);
+		}
+		if (enabled(cfg, "near_lava") && st.lavaNear) {
+			st.desired.put("near_lava", cfg.constants.get("near_lava").intensity);
+		}
+		ResourceKey<Level> dim = p.level().dimension();
+		if (enabled(cfg, "in_nether") && Level.NETHER.equals(dim)) {
+			st.desired.put("in_nether", cfg.constants.get("in_nether").intensity);
+		}
+		if (enabled(cfg, "in_end") && Level.END.equals(dim)) {
+			st.desired.put("in_end", cfg.constants.get("in_end").intensity);
+		}
+
+		c = cfg.constants.get("falling");
+		if (c != null && c.intensity > 0 && !p.onGround() && !p.isFallFlying() && !p.isPassenger()
+				&& !p.isInWater() && p.fallDistance > 1.5) {
+			double speed = -p.getDeltaMovement().y;
+			if (speed > c.threshold) st.desired.put("falling", scaled(c, highBased(speed, c.threshold)));
+		}
+
+		// Alarm burst the first moment health drops below 25% (re-arms above 40%).
+		double hpPct = p.getHealth() / Math.max(1.0F, p.getMaxHealth()) * 100.0;
+		if (hpPct < 25) {
+			if (!st.healthAlerted) {
+				st.healthAlerted = true;
+				burst(p, "low_health_alert");
+			}
+		} else if (hpPct > 40) {
+			st.healthAlerted = false;
 		}
 	}
 
@@ -501,14 +552,22 @@ public class PlantDirector {
 	}
 
 	private static void scanCreepers(ServerPlayer p, PlayerState st) {
-		if (!burstEnabled("creeper_fuse")) return;
+		// The fused set is always maintained (even when a burst is disabled)
+		// because the "creeper_fusing" constant reads it.
 		for (Creeper creeper : p.level().getEntitiesOfClass(Creeper.class, p.getBoundingBox().inflate(12))) {
 			if (creeper.getSwellDir() > 0) {
-				if (st.fusedCreepers.add(creeper.getId())) burst(p, "creeper_fuse");
+				if (st.fusedCreepers.add(creeper.getId()) && burstEnabled("creeper_fuse")) burst(p, "creeper_fuse");
 			} else {
 				st.fusedCreepers.remove(creeper.getId());
 			}
 		}
+		Set<Integer> liveTnt = new HashSet<>();
+		for (PrimedTnt tnt : p.level().getEntitiesOfClass(PrimedTnt.class, p.getBoundingBox().inflate(16))) {
+			int id = tnt.getId();
+			liveTnt.add(id);
+			if (st.fusedTnt.add(id) && burstEnabled("tnt_primed")) burst(p, "tnt_primed");
+		}
+		st.fusedTnt.retainAll(liveTnt);
 		if (st.fusedCreepers.size() > 64) st.fusedCreepers.clear();
 	}
 
@@ -530,6 +589,19 @@ public class PlantDirector {
 			if (st.nearbyPlayers.add(id)) burst(p, "player_nearby");
 		}
 		st.nearbyPlayers.retainAll(withinKeep);
+	}
+
+	/** Lava within ~4 blocks (danger awareness while caving). */
+	private static void scanLava(ServerPlayer p, PlayerState st) {
+		st.lavaNear = false;
+		if (!enabled(PlantApiMod.config, "near_lava")) return;
+		BlockPos center = p.blockPosition();
+		for (BlockPos pos : BlockPos.betweenClosed(center.offset(-4, -2, -4), center.offset(4, 2, 4))) {
+			if (p.level().getBlockState(pos).getFluidState().is(FluidTags.LAVA)) {
+				st.lavaNear = true;
+				return;
+			}
+		}
 	}
 
 	private static void scanBoss(ServerPlayer p, PlayerState st) {
@@ -740,14 +812,17 @@ public class PlantDirector {
 		boolean raidVictoryReported;
 		Raid lastRaid;
 		int hostileCount;
+		boolean lavaNear;
 		double bossDistance = Double.MAX_VALUE;
 		double toolDurability = 100;
 		double armorDurability = 100;
 		boolean invSeeded;
 		Map<Item, Integer> lastItems = new HashMap<>();
+		boolean healthAlerted;
 		boolean advSeeded;
 		Set<String> doneAdvancements = new HashSet<>();
 		Set<Integer> fusedCreepers = new HashSet<>();
+		Set<Integer> fusedTnt = new HashSet<>();
 		Map<Integer, Double> hookY = new HashMap<>();
 		Map<Integer, Integer> hookAge = new HashMap<>();
 		Set<Integer> liveHooks = new HashSet<>();

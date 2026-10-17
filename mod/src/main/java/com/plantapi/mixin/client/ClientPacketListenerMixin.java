@@ -7,6 +7,7 @@ import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.protocol.game.ClientboundBossEventPacket;
 import net.minecraft.network.protocol.game.ClientboundDamageEventPacket;
 import net.minecraft.network.protocol.game.ClientboundEntityEventPacket;
+import net.minecraft.network.protocol.game.ClientboundSoundPacket;
 import net.minecraft.world.entity.Entity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -37,5 +38,10 @@ public class ClientPacketListenerMixin {
 	@Inject(method = "handleBossUpdate", at = @At("HEAD"))
 	private void plantapi$bossUpdate(ClientboundBossEventPacket packet, CallbackInfo ci) {
 		packet.dispatch(PlantClientDirector.BOSS_OBSERVER);
+	}
+
+	@Inject(method = "handleSoundEvent", at = @At("HEAD"))
+	private void plantapi$soundEvent(ClientboundSoundPacket packet, CallbackInfo ci) {
+		PlantClientDirector.onSoundPacket(packet.getX(), packet.getY(), packet.getZ(), packet.getSound());
 	}
 }
