@@ -19,3 +19,8 @@ bridge/bin/
 bridge/obj/
 bridge/publish/
 bridge/smoke-*.txt
+
+# Plant Pulse (desktop haptic transmitter)
+desktop/bin/
+desktop/obj/
+desktop/publish/

@@ -21,6 +21,14 @@ Fabric mod ("Plant API") + iPhone companion app ("MCVibe"). Host PC: Windows.
 - The "Lock controls" screen hides the footer entirely while locked, and unlocking requires three confirmations (single pocket taps kept unlocking it).
 - Haptic loops (phone-only, no PC/game needed): `HapticLoop.swift` defines five native Core Haptics loops (Heartbeat, Breathing, Rain, Purr, Warp); `LoopSheet.swift` is the picker/intensity UI; `HapticsEngine` owns the native looping players (`loopEnabled`), restarts the active loop after engine interruptions/foregrounding, and stops it on lock/mute. Intensity is baked in and the pattern is rebuilt once on slider release.
 
+## Windows app ("Plant Pulse" — haptic pattern transmitter)
+- Source: `desktop/` (C# / .NET 10, WinForms). Build: `cd desktop && dotnet publish -c Release -o publish` → `publish\PlantPulse.exe`; run: `desktop\run-plantpulse.bat`. Desktop shortcut **"Plant Pulse"** (OneDrive Desktop) points at the bat and uses the exe icon.
+- Serves the same haptics protocol as the mod (TCP 25666 + UDP discovery 25667) and streams six looping textures — Heartbeat, Groove, Warp, Rain, Purr, Riser — with tempo (40–180 BPM) and intensity. No game and **no phone-app/IPA changes** are required: it works with the app that is already installed.
+- Bluetooth path = the existing **Plant Bridge** (a TCP client of 127.0.0.1:25666); the app's "Start Bluetooth bridge" button launches `bridge\publish\PlantBridge.exe`, and its status row detects a running `PlantBridge` process. Wi-Fi path = the phone discovers "Plant Pulse" over UDP and connects directly.
+- Port 25666 is shared with the mod, so Minecraft and Plant Pulse cannot run at the same time; the app shows "Waiting for port 25666" while the game holds it.
+- Headless smoke test: `PlantPulse.exe --test` serves the protocol and plays every texture (used with a small TCP client to verify all ids).
+- Design: patterns are generated on one dedicated thread with a `Stopwatch` (drift-free sleeps, no WinForms timers); rate limits mirror the mod (60 ms per id, 20 bursts/s); constants are re-synced every 2 s for late/lossy BLE subscribers.
+
 ## Windows bridge (Bluetooth path)
 - Source: `bridge/` (C# / .NET 10, TFM `net10.0-windows10.0.26100.0`).
 - Build: `cd bridge && dotnet publish -c Release -o publish` → `publish\PlantBridge.exe`; run: `bridge\run-bridge.bat`.
