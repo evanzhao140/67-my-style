@@ -118,7 +118,7 @@ final class Discovery {
             name: (obj["name"] as? String) ?? hostIP,
             host: hostIP,
             port: port,
-            mc: (obj["mc"] as? String) ?? "?"
+            mc: (obj["mc"] as? String) ?? ""
         )
         hosts[host.id] = (host, Date())
     }

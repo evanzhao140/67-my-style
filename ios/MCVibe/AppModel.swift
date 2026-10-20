@@ -9,6 +9,12 @@ final class AppModel: ObservableObject {
     @Published var locked = false
     @Published var manualInput = ""
     @Published var lastEvent = ""
+    @Published var activeLoop: HapticLoop?
+
+    /// Intensity for looping textures, persisted between launches.
+    @Published var loopLevel: Double = 70 {
+        didSet { UserDefaults.standard.set(loopLevel, forKey: "loopLevel") }
+    }
 
     enum Transport: String {
         case wifi
@@ -32,6 +38,7 @@ final class AppModel: ObservableObject {
         didSet {
             if hapticsMuted {
                 haptics.setConstant(0)
+                if activeLoop != nil { stopLoop() }
             } else {
                 applyConstants()
             }
@@ -47,8 +54,9 @@ final class AppModel: ObservableObject {
 
     init() {
         manualInput = UserDefaults.standard.string(forKey: "lastHostInput") ?? ""
+        loopLevel = (UserDefaults.standard.object(forKey: "loopLevel") as? Double) ?? 70
         transport = Transport(rawValue: UserDefaults.standard.string(forKey: "transport") ?? "") ?? .wifi
-        AppLog.add("app launched (v5)")
+        AppLog.add("app launched (v6)")
 
         link.onPhase = { [weak self] phase, detail in
             Task { @MainActor in self?.applyPhase(phase, detail) }
@@ -125,7 +133,40 @@ final class AppModel: ObservableObject {
 
     func toggleLock() {
         locked.toggle()
+        if locked { stopLoop() }
         UIApplication.shared.isIdleTimerDisabled = locked || phase == .connected
+    }
+
+    // MARK: - Phone-only haptic loops
+
+    /// Starts or stops a looping texture. Completely local: no link involved.
+    func toggleLoop(_ loop: HapticLoop) {
+        if activeLoop == loop {
+            stopLoop()
+            return
+        }
+        if hapticsMuted { hapticsMuted = false }
+        activeLoop = loop
+        let level = min(max(loopLevel, 10), 100)
+        haptics.startLoop(loop, intensity: level)
+        lastEvent = "◉ \(loop.name) loop · \(Int(level))%"
+        AppLog.add("loop start: \(loop.rawValue) at \(Int(level))%")
+    }
+
+    func stopLoop() {
+        guard activeLoop != nil else { return }
+        activeLoop = nil
+        haptics.stopLoop()
+        if lastEvent.hasPrefix("◉") { lastEvent = "" }
+        AppLog.add("loop stopped")
+    }
+
+    /// Applies the slider value once the user lets go (one rebuild, not one per tick).
+    func applyLoopLevel() {
+        guard let loop = activeLoop else { return }
+        haptics.startLoop(loop, intensity: loopLevel)
+        lastEvent = "◉ \(loop.name) loop · \(Int(loopLevel))%"
+        AppLog.add("loop level \(Int(loopLevel))%")
     }
 
     private func applyPhase(_ phase: LinkClient.Phase, _ detail: String) {
@@ -147,7 +188,7 @@ final class AppModel: ObservableObject {
         switch msg.type {
         case "hello":
             connectedName = msg.name ?? "PC"
-            let mc = msg.mc.map { " • MC \($0)" } ?? ""
+            let mc = msg.mc.flatMap { $0.isEmpty ? nil : " • MC \($0)" } ?? ""
             statusText = "Connected to \(connectedName)\(mc)"
             lastEvent = ""
             AppLog.add("hello from \(connectedName)\(mc)")

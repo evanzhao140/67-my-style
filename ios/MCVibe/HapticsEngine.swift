@@ -26,6 +26,13 @@ final class HapticsEngine {
     private var retiringConstantPlayer: CHHapticAdvancedPatternPlayer?
     private var currentConstant: Double = 0
 
+    // Phone-only looping textures (see HapticLoop). The engine loops these
+    // natively, so keeping one alive costs no timers or per-beat work.
+    private var loopPlayer: CHHapticAdvancedPatternPlayer?
+    private var retiringLoopPlayers: [CHHapticAdvancedPatternPlayer] = []
+    private var activeLoop: HapticLoop?
+    private var activeLoopLevel: Double = 0
+
     private var lastBurstAt = Date.distantPast
     private var lastBurstLogAt = Date.distantPast
 
@@ -36,6 +43,22 @@ final class HapticsEngine {
         }
         configureAudioSession()
         startEngine()
+
+        // Calls and other interruptions can kill the engine; when the app comes
+        // back, restart a loop that was playing.
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.recoverAfterForeground() }
+        }
+    }
+
+    private func recoverAfterForeground() {
+        guard activeLoop != nil else { return }
+        if !engineRunning { startEngine() }
+        rebuildLoopPlayer()
     }
 
     /// Ambient + mix so haptics never interrupt the user's music, and so the
@@ -93,6 +116,11 @@ final class HapticsEngine {
             retiringConstantPlayer = constantPlayer
             constantPlayer = nil
             if currentConstant > 0 { rebuildConstant() }
+
+            // The old players died with the engine; start the loop again.
+            loopPlayer = nil
+            retiringLoopPlayers.removeAll()
+            if activeLoop != nil { rebuildLoopPlayer() }
         } catch {
             AppLog.add("haptics: engine restart failed")
         }
@@ -223,9 +251,63 @@ final class HapticsEngine {
         }
     }
 
+    // MARK: - Phone-only loops
+
+    /// Starts, switches or retunes a native looping pattern. Level is 0...100.
+    func startLoop(_ loop: HapticLoop, intensity: Double) {
+        let level = min(max(intensity / 100.0, 0.0), 1.0)
+        guard level.isFinite, level > 0.01 else { stopLoop(); return }
+
+        let unchanged = activeLoop == loop && abs(level - activeLoopLevel) < 0.001
+        activeLoop = loop
+        activeLoopLevel = level
+        guard !unchanged else { return }
+
+        rebuildLoopPlayer()
+        AppLog.add("haptic loop \(loop.rawValue) at \(Int(level * 100))%")
+    }
+
+    func stopLoop() {
+        let wasActive = activeLoop != nil
+        activeLoop = nil
+        activeLoopLevel = 0
+        retireLoopPlayer()
+        if wasActive { AppLog.add("haptic loop stopped") }
+    }
+
+    private func rebuildLoopPlayer() {
+        retireLoopPlayer()
+        guard supported, let loop = activeLoop, activeLoopLevel > 0.01,
+              let engine = ensureEngine() else { return }
+        do {
+            let pattern = try loop.makePattern(level: activeLoopLevel)
+            let player = try engine.makeAdvancedPlayer(with: pattern)
+            player.loopEnabled = true
+            try player.start(atTime: CHHapticTimeImmediate)
+            loopPlayer = player
+        } catch {
+            loopPlayer = nil
+            AppLog.add("haptics: loop failed \(error.localizedDescription)")
+        }
+    }
+
+    private func retireLoopPlayer() {
+        guard let player = loopPlayer else { return }
+        player.loopEnabled = false
+        try? player.stop(atTime: CHHapticTimeImmediate)
+        // Keep a few stopped players alive: releasing an advanced player right
+        // after stop() is a known CoreHaptics crash source.
+        retiringLoopPlayers.append(player)
+        loopPlayer = nil
+        if retiringLoopPlayers.count > 4 {
+            retiringLoopPlayers.removeFirst()
+        }
+    }
+
     func stopAll() {
         currentConstant = 0
         rebuildConstant()
+        stopLoop()
     }
 
     /// Fallback when CoreHaptics is unavailable or the engine cannot start:

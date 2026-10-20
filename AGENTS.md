@@ -19,6 +19,7 @@ Fabric mod ("Plant API") + iPhone companion app ("MCVibe"). Host PC: Windows.
 - CI: `.github/workflows/build.yml` on push → artifact `plantapi-ipa` (contains `plantapi-unsigned.ipa`; sideload with Sideloadly).
 - Transports: Wi-Fi (raw-socket TCP port 25666 + UDP discovery 25667) and Bluetooth (BLE GATT via the Windows bridge).
 - The "Lock controls" screen hides the footer entirely while locked, and unlocking requires three confirmations (single pocket taps kept unlocking it).
+- Haptic loops (phone-only, no PC/game needed): `HapticLoop.swift` defines five native Core Haptics loops (Heartbeat, Breathing, Rain, Purr, Warp); `LoopSheet.swift` is the picker/intensity UI; `HapticsEngine` owns the native looping players (`loopEnabled`), restarts the active loop after engine interruptions/foregrounding, and stops it on lock/mute. Intensity is baked in and the pattern is rebuilt once on slider release.
 
 ## Windows bridge (Bluetooth path)
 - Source: `bridge/` (C# / .NET 10, TFM `net10.0-windows10.0.26100.0`).

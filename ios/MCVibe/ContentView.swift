@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject var model: AppModel
     @State private var showLog = false
+    @State private var showLoops = false
     /// 0 = locked screen; 1...3 = unlock confirmation steps.
     @State private var unlockStep = 0
 
@@ -14,9 +15,14 @@ struct ContentView: View {
                 lockedFlow
                 Spacer(minLength: 0)
             } else {
-                connectSection
-                lockButton
-                Spacer(minLength: 0)
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 16) {
+                        connectSection
+                        loopsSection
+                        lockButton
+                    }
+                    .padding(.vertical, 2)
+                }
                 footer
             }
         }
@@ -82,7 +88,7 @@ struct ContentView: View {
                             HStack {
                                 Text("🖥️ \(host.name)")
                                 Spacer()
-                                Text("\(host.host) • MC \(host.mc)")
+                                Text(host.mc.isEmpty ? host.host : "\(host.host) • MC \(host.mc)")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -121,6 +127,58 @@ struct ContentView: View {
                 .buttonStyle(.borderedProminent)
         }
         .padding(.vertical, 6)
+    }
+
+    /// Phone-only looping textures: they work with or without a PC connection.
+    @ViewBuilder
+    private var loopsSection: some View {
+        HStack(spacing: 8) {
+            Button {
+                showLoops = true
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: model.activeLoop?.systemImage ?? "waveform.path")
+                        .font(.title3)
+                        .frame(width: 28)
+                        .foregroundStyle(model.activeLoop == nil ? Color.secondary : Color.purple)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(model.activeLoop.map { "\($0.name) loop" } ?? "Haptic loops")
+                            .font(.subheadline.weight(.semibold))
+                        Text(model.activeLoop == nil
+                             ? "Cool patterns that loop on the phone"
+                             : "Playing · tap to change")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer(minLength: 6)
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(12)
+                .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
+                .contentShape(RoundedRectangle(cornerRadius: 14))
+            }
+            .buttonStyle(.plain)
+
+            if model.activeLoop != nil {
+                Button {
+                    model.stopLoop()
+                } label: {
+                    Image(systemName: "stop.fill")
+                        .font(.body.weight(.bold))
+                        .frame(width: 44, height: 44)
+                        .background(Color.red.opacity(0.25), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.red)
+                .accessibilityLabel("Stop haptic loop")
+            }
+        }
+        .sheet(isPresented: $showLoops) { LoopSheet() }
     }
 
     private var lockButton: some View {
