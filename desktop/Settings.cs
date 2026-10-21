@@ -15,6 +15,8 @@ public sealed class Settings
     public int OsuAccentEvery { get; set; } = 8;
     public bool OsuMissBuzz { get; set; } = true;
     public bool OsuStartPing { get; set; } = true;
+    public int OsuFlow { get; set; } = 50;
+    public bool OsuSwell { get; set; } = true;
 
     public static string Dir => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "PlantPulse");
@@ -45,6 +47,7 @@ public sealed class Settings
                     settings.OsuAccentEvery = settings.OsuAccentEvery <= 4 ? 4
                         : settings.OsuAccentEvery <= 8 ? 8
                         : 16;
+                    settings.OsuFlow = Math.Clamp(settings.OsuFlow, 0, 90);
                     return settings;
                 }
             }

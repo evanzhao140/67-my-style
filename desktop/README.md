@@ -39,15 +39,21 @@ websocket and streams hits to the phone.
 4. Connect the phone as usual — Wi-Fi, or Bluetooth via **Start bridge**.
 5. Play lazer.
 
-Every hit is a short tick, every 4th/8th/16th hit is accented, combo adds a
-little energy, and misses get a low thud. **Hit intensity**, **Accent**,
-**Miss buzz** and **Start ping** are adjustable, and the current beatmap,
-combo, hits and misses are shown live.
+The phone gets a continuous **Flow** bed (default 50%) under the peaks, so fast
+sections stay connected instead of tapping into silence. Flow swells with hits,
+combo and kiai, relaxes during breaks, pauses with the game, and briefly ducks on
+a miss; every 50 combo lands a triple peak. Each hit is a longer 90 ms pulse
+(110 ms on a perfect), and every 4th/8th/16th hit is a bigger 170 ms accent.
+**Flow**, **Hit peaks**, **Accent**, **Miss buzz** and **Start ping** are
+adjustable, and the current beatmap, combo, hits, misses and live flow level are
+shown. Set Flow to 0 for the old taps-only feel.
 
 Notes:
 
 - tosu's precise feed polls every 10 ms by default; that is what keeps the taps
   tight. If you edited `PRECISE_DATA_POLL_RATE`, keep it at 10 ms or lower.
+- Flow follows the full feed: `game.paused` stops it, `beatmap.isBreak` lowers
+  it, and `beatmap.isKiai` lifts it.
 - osu!catch has no hit-error stream, so it automatically falls back to the
   score counters (still synced, just slightly coarser).
 - Nothing is injected or patched in lazer, and no phone-app change is needed.

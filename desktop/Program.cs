@@ -100,7 +100,7 @@ internal static class Program
         server.Start();
 
         using OsuSyncEngine engine = new(server, 24051);
-        engine.SetOptions(70, 4, true, true);
+        engine.SetOptions(70, 4, true, true, 50, true);
         engine.Enabled = true;
 
         Thread.Sleep(20000);

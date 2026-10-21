@@ -34,6 +34,9 @@ public sealed class OsuSyncForm : Form
     private readonly Label _helpLabel = new();
     private readonly Button _startTosuButton = new();
     private readonly Button _getTosuButton = new();
+    private readonly TrackBar _flow = new();
+    private readonly Label _flowValue = new();
+    private readonly CheckBox _swell = new();
     private readonly TrackBar _intensity = new();
     private readonly Label _intensityValue = new();
     private readonly ComboBox _accent = new();
@@ -47,7 +50,7 @@ public sealed class OsuSyncForm : Form
         _settings = settings;
 
         Text = "osu! sync — Plant Pulse";
-        ClientSize = new Size(552, 524);
+        ClientSize = new Size(552, 604);
         BackColor = Canvas;
         ForeColor = Color.White;
         Font = new Font("Segoe UI", 9.5f);
@@ -71,7 +74,9 @@ public sealed class OsuSyncForm : Form
             _settings.OsuIntensity,
             _settings.OsuAccentEvery,
             _settings.OsuMissBuzz,
-            _settings.OsuStartPing);
+            _settings.OsuStartPing,
+            _settings.OsuFlow,
+            _settings.OsuSwell);
         _engine.Enabled = _settings.OsuSyncEnabled;
 
         _timer.Interval = 300;
@@ -154,9 +159,44 @@ public sealed class OsuSyncForm : Form
 
     private void BuildOptions()
     {
-        AddLabel("Hit intensity", 24, 246, 160, 22, 9.5f, Color.White, FontStyle.Bold);
+        AddLabel("Flow (constant)", 24, 244, 200, 22, 9.5f, Color.White, FontStyle.Bold);
+        _flowValue.Left = 380;
+        _flowValue.Top = 244;
+        _flowValue.Width = 148;
+        _flowValue.Height = 22;
+        _flowValue.TextAlign = ContentAlignment.MiddleRight;
+        _flowValue.ForeColor = Dim;
+        Controls.Add(_flowValue);
+
+        _flow.Left = 24;
+        _flow.Top = 264;
+        _flow.Width = 504;
+        _flow.Height = 40;
+        _flow.Minimum = 0;
+        _flow.Maximum = 90;
+        _flow.TickFrequency = 10;
+        _flow.TickStyle = TickStyle.None;
+        _flow.SmallChange = 1;
+        _flow.LargeChange = 10;
+        _flow.Value = Math.Clamp(_settings.OsuFlow, _flow.Minimum, _flow.Maximum);
+        _flow.ValueChanged += (_, _) => PushOptions();
+        Controls.Add(_flow);
+
+        _swell.Left = 24;
+        _swell.Top = 306;
+        _swell.Width = 330;
+        _swell.Height = 24;
+        _swell.Text = "Swell with hits, combo and kiai";
+        _swell.ForeColor = Color.White;
+        _swell.BackColor = Canvas;
+        _swell.FlatStyle = FlatStyle.Flat;
+        _swell.Checked = _settings.OsuSwell;
+        _swell.CheckedChanged += (_, _) => PushOptions();
+        Controls.Add(_swell);
+
+        AddLabel("Hit peaks", 24, 338, 160, 22, 9.5f, Color.White, FontStyle.Bold);
         _intensityValue.Left = 380;
-        _intensityValue.Top = 246;
+        _intensityValue.Top = 338;
         _intensityValue.Width = 148;
         _intensityValue.Height = 22;
         _intensityValue.TextAlign = ContentAlignment.MiddleRight;
@@ -164,7 +204,7 @@ public sealed class OsuSyncForm : Form
         Controls.Add(_intensityValue);
 
         _intensity.Left = 24;
-        _intensity.Top = 266;
+        _intensity.Top = 358;
         _intensity.Width = 504;
         _intensity.Height = 40;
         _intensity.Minimum = 10;
@@ -178,10 +218,10 @@ public sealed class OsuSyncForm : Form
         Controls.Add(_intensity);
         _intensityValue.Text = _intensity.Value + "%";
 
-        AddLabel("Accent", 24, 314, 160, 24, 9.5f, Color.White, FontStyle.Bold);
+        AddLabel("Accent", 24, 406, 160, 24, 9.5f, Color.White, FontStyle.Bold);
 
         _accent.Left = 380;
-        _accent.Top = 310;
+        _accent.Top = 402;
         _accent.Width = 148;
         _accent.Height = 28;
         _accent.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -194,7 +234,7 @@ public sealed class OsuSyncForm : Form
         Controls.Add(_accent);
 
         _missBuzz.Left = 24;
-        _missBuzz.Top = 348;
+        _missBuzz.Top = 438;
         _missBuzz.Width = 150;
         _missBuzz.Height = 24;
         _missBuzz.Text = "Miss buzz";
@@ -206,7 +246,7 @@ public sealed class OsuSyncForm : Form
         Controls.Add(_missBuzz);
 
         _startPing.Left = 190;
-        _startPing.Top = 348;
+        _startPing.Top = 438;
         _startPing.Width = 150;
         _startPing.Height = 24;
         _startPing.Text = "Start ping";
@@ -216,12 +256,14 @@ public sealed class OsuSyncForm : Form
         _startPing.Checked = _settings.OsuStartPing;
         _startPing.CheckedChanged += (_, _) => PushOptions();
         Controls.Add(_startPing);
+
+        PushOptions();
     }
 
     private void BuildTosuHelp()
     {
         _helpLabel.Left = 24;
-        _helpLabel.Top = 384;
+        _helpLabel.Top = 474;
         _helpLabel.Width = 300;
         _helpLabel.Height = 42;
         _helpLabel.Font = new Font("Segoe UI", 8.4f);
@@ -229,7 +271,7 @@ public sealed class OsuSyncForm : Form
         Controls.Add(_helpLabel);
 
         _startTosuButton.Left = 336;
-        _startTosuButton.Top = 382;
+        _startTosuButton.Top = 472;
         _startTosuButton.Width = 90;
         _startTosuButton.Height = 32;
         StyleSmallButton(_startTosuButton, "Start tosu");
@@ -237,7 +279,7 @@ public sealed class OsuSyncForm : Form
         Controls.Add(_startTosuButton);
 
         _getTosuButton.Left = 434;
-        _getTosuButton.Top = 382;
+        _getTosuButton.Top = 472;
         _getTosuButton.Width = 94;
         _getTosuButton.Height = 32;
         StyleSmallButton(_getTosuButton, "Get tosu");
@@ -248,7 +290,7 @@ public sealed class OsuSyncForm : Form
     private void BuildBridgeRow()
     {
         _bridgeStatus.Left = 24;
-        _bridgeStatus.Top = 428;
+        _bridgeStatus.Top = 518;
         _bridgeStatus.Width = 320;
         _bridgeStatus.Height = 24;
         _bridgeStatus.Font = new Font("Segoe UI", 8.5f);
@@ -256,7 +298,7 @@ public sealed class OsuSyncForm : Form
         Controls.Add(_bridgeStatus);
 
         _bridgeButton.Left = 380;
-        _bridgeButton.Top = 424;
+        _bridgeButton.Top = 514;
         _bridgeButton.Width = 148;
         _bridgeButton.Height = 32;
         StyleSmallButton(_bridgeButton, "Start bridge");
@@ -267,9 +309,9 @@ public sealed class OsuSyncForm : Form
     private void BuildFooter()
     {
         AddLabel("Wi-Fi: the phone discovers Plant Pulse automatically.",
-            24, 470, 504, 18, 8f, Color.FromArgb(122, 122, 138));
+            24, 560, 504, 18, 8f, Color.FromArgb(122, 122, 138));
         AddLabel("Bluetooth: Plant Bridge relays port 25666 over BLE.",
-            24, 488, 504, 18, 8f, Color.FromArgb(122, 122, 138));
+            24, 578, 504, 18, 8f, Color.FromArgb(122, 122, 138));
     }
 
     private void StyleSmallButton(Button button, string text)
@@ -314,12 +356,16 @@ public sealed class OsuSyncForm : Form
 
     private void PushOptions()
     {
+        _flowValue.Text = _flow.Value == 0 ? "off" : _flow.Value + "%";
+        _swell.Enabled = _flow.Value > 0;
         _intensityValue.Text = _intensity.Value + "%";
         _engine?.SetOptions(
             _intensity.Value,
             AccentEvery(),
             _missBuzz.Checked,
-            _startPing.Checked);
+            _startPing.Checked,
+            _flow.Value,
+            _swell.Checked);
     }
 
     private void ToggleSync()
@@ -361,7 +407,9 @@ public sealed class OsuSyncForm : Form
         _stateLabel.Text = DisplayState(_engine.StateName, playing);
         _stateLabel.ForeColor = playing ? Good : Dim;
         _beatmapLabel.Text = _engine.BeatmapLabel;
-        _statsLabel.Text = $"{_engine.Combo}x combo  ·  {_engine.TotalHits} hits  ·  {_engine.Misses} misses";
+        string kiaiTag = _engine.Kiai ? "  ·  KIAI" : "";
+        _statsLabel.Text = $"{_engine.Combo}x combo  ·  {_engine.TotalHits} hits  ·  " +
+                           $"{_engine.Misses} misses  ·  flow {_engine.FlowLevel}%{kiaiTag}";
 
         _helpLabel.Text = tosu
             ? "tosu is feeding live hits. Keep it running while you play."
@@ -517,6 +565,8 @@ public sealed class OsuSyncForm : Form
         _settings.OsuAccentEvery = AccentEvery();
         _settings.OsuMissBuzz = _missBuzz.Checked;
         _settings.OsuStartPing = _startPing.Checked;
+        _settings.OsuFlow = _flow.Value;
+        _settings.OsuSwell = _swell.Checked;
         _settings.Save();
         _engine.Dispose();
     }
