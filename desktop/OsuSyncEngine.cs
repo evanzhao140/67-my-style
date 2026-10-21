@@ -220,7 +220,7 @@ public sealed class OsuSyncEngine : IDisposable
 
             try
             {
-                await Task.Delay(90, token).ConfigureAwait(false);
+                await Task.Delay(110, token).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -295,7 +295,9 @@ public sealed class OsuSyncEngine : IDisposable
             active = _flowActive;
         }
 
-        if (active && Math.Abs(target - current) < 2) return;
+        // Deliberately coarse: the bed should follow the song, not flood the
+        // BLE link at the expense of hit timing.
+        if (active && Math.Abs(target - current) < 3) return;
 
         int next = active ? current + (target - current) / 2 : target;
         if (Math.Abs(next - target) <= 1) next = target;
