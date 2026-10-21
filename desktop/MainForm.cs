@@ -34,6 +34,7 @@ public sealed class MainForm : Form
 
     private int _selected;
     private OsuSyncForm _osuForm;
+    private bool _sketchOpen;
 
     public MainForm()
     {
@@ -41,7 +42,7 @@ public sealed class MainForm : Form
         _selected = Math.Clamp(_settings.Pattern, 0, PatternEngine.Patterns.Length - 1);
 
         Text = "Plant Pulse";
-        ClientSize = new Size(552, 630);
+        ClientSize = new Size(552, 702);
         BackColor = Canvas;
         ForeColor = Color.White;
         Font = new Font("Segoe UI", 9.5f);
@@ -119,14 +120,28 @@ public sealed class MainForm : Form
 
     private void BuildPatternGrid()
     {
-        for (int i = 0; i < PatternEngine.Patterns.Length; i++)
+        const int slots = 8;
+        for (int i = 0; i < slots; i++)
         {
             int index = i;
-            (string name, string hint) = PatternEngine.Patterns[i];
+            string text;
+            Action click;
+
+            if (i < PatternEngine.Patterns.Length)
+            {
+                (string name, string hint) = PatternEngine.Patterns[i];
+                text = name + "\n" + hint;
+                click = () => SelectPattern(index);
+            }
+            else
+            {
+                text = "Draw custom\nsketch your own peaks";
+                click = OpenSketch;
+            }
 
             Button button = new()
             {
-                Text = name + "\n" + hint,
+                Text = text,
                 Left = 24 + (i % 2) * 258,
                 Top = 112 + (i / 2) * 72,
                 Width = 246,
@@ -142,7 +157,7 @@ public sealed class MainForm : Form
             button.FlatAppearance.BorderColor = Border;
             button.FlatAppearance.BorderSize = 1;
             button.FlatAppearance.MouseOverBackColor = Color.FromArgb(36, 36, 48);
-            button.Click += (_, _) => SelectPattern(index);
+            button.Click += (_, _) => click();
 
             Controls.Add(button);
             _patternButtons.Add(button);
@@ -151,9 +166,9 @@ public sealed class MainForm : Form
 
     private void BuildSliders()
     {
-        AddLabel("Tempo", 24, 334, 140, 22, 9.5f, Color.White, FontStyle.Bold);
+        AddLabel("Tempo", 24, 406, 140, 22, 9.5f, Color.White, FontStyle.Bold);
         _bpmValue.Left = 380;
-        _bpmValue.Top = 334;
+        _bpmValue.Top = 406;
         _bpmValue.Width = 148;
         _bpmValue.Height = 22;
         _bpmValue.TextAlign = ContentAlignment.MiddleRight;
@@ -161,7 +176,7 @@ public sealed class MainForm : Form
         Controls.Add(_bpmValue);
 
         _bpm.Left = 24;
-        _bpm.Top = 354;
+        _bpm.Top = 426;
         _bpm.Width = 504;
         _bpm.Height = 42;
         _bpm.Minimum = 40;
@@ -179,9 +194,9 @@ public sealed class MainForm : Form
         Controls.Add(_bpm);
         _bpmValue.Text = _bpm.Value + " BPM";
 
-        AddLabel("Intensity", 24, 400, 140, 22, 9.5f, Color.White, FontStyle.Bold);
+        AddLabel("Intensity", 24, 472, 140, 22, 9.5f, Color.White, FontStyle.Bold);
         _intensityValue.Left = 380;
-        _intensityValue.Top = 400;
+        _intensityValue.Top = 472;
         _intensityValue.Width = 148;
         _intensityValue.Height = 22;
         _intensityValue.TextAlign = ContentAlignment.MiddleRight;
@@ -189,7 +204,7 @@ public sealed class MainForm : Form
         Controls.Add(_intensityValue);
 
         _intensity.Left = 24;
-        _intensity.Top = 420;
+        _intensity.Top = 492;
         _intensity.Width = 504;
         _intensity.Height = 42;
         _intensity.Minimum = 10;
@@ -211,7 +226,7 @@ public sealed class MainForm : Form
     private void BuildPlayButton()
     {
         _playButton.Left = 24;
-        _playButton.Top = 472;
+        _playButton.Top = 544;
         _playButton.Width = 504;
         _playButton.Height = 46;
         _playButton.FlatStyle = FlatStyle.Flat;
@@ -232,10 +247,10 @@ public sealed class MainForm : Form
     private void BuildBridgeRow()
     {
         AddLabel("Bluetooth: start the bridge, then connect in the app.",
-            24, 532, 320, 34, 8.4f, Dim);
+            24, 604, 320, 34, 8.4f, Dim);
 
         _bridgeButton.Left = 348;
-        _bridgeButton.Top = 530;
+        _bridgeButton.Top = 602;
         _bridgeButton.Width = 180;
         _bridgeButton.Height = 34;
         _bridgeButton.FlatStyle = FlatStyle.Flat;
@@ -252,9 +267,9 @@ public sealed class MainForm : Form
     private void BuildFooter()
     {
         AddLabel("Wi-Fi: the phone finds “Plant Pulse” on the same network.",
-            24, 576, 504, 18, 8f, Color.FromArgb(122, 122, 138));
+            24, 648, 504, 18, 8f, Color.FromArgb(122, 122, 138));
         AddLabel("Bluetooth: Plant Bridge relays port 25666 over BLE.",
-            24, 594, 504, 18, 8f, Color.FromArgb(122, 122, 138));
+            24, 666, 504, 18, 8f, Color.FromArgb(122, 122, 138));
     }
 
     private Label AddLabel(string text, int left, int top, int width, int height,
@@ -307,11 +322,36 @@ public sealed class MainForm : Form
         for (int i = 0; i < _patternButtons.Count; i++)
         {
             bool active = i == _selected && _engine.Running;
+            bool custom = i >= PatternEngine.Patterns.Length;
             Button button = _patternButtons[i];
-            button.BackColor = active ? Color.FromArgb(48, 32, 72) : Panel;
-            button.FlatAppearance.BorderColor = active ? Accent : Border;
+            button.BackColor = active
+                ? Color.FromArgb(48, 32, 72)
+                : custom ? Color.FromArgb(30, 26, 40) : Panel;
+            button.FlatAppearance.BorderColor = active
+                ? Accent
+                : custom ? Color.FromArgb(72, 56, 98) : Border;
             button.FlatAppearance.BorderSize = active ? 2 : 1;
             button.ForeColor = active ? Color.White : Color.FromArgb(220, 220, 230);
+        }
+    }
+
+    private void OpenSketch()
+    {
+        if (_sketchOpen) return;
+        if (_osuForm != null && !_osuForm.IsDisposed) _osuForm.Close();
+        if (_engine.Running) StopPlayback();
+
+        _sketchOpen = true;
+        try
+        {
+            using SketchForm form = new(_server, _settings);
+            form.ShowDialog(this);
+        }
+        finally
+        {
+            _sketchOpen = false;
+            _server.Clear();
+            RefreshStatus();
         }
     }
 
@@ -335,7 +375,11 @@ public sealed class MainForm : Form
         _bridgeStatus.Text = bridge ? "Bluetooth bridge running" : "Bluetooth bridge off";
         _bridgeStatus.ForeColor = bridge ? Good : Dim;
         _bridgeButton.Text = bridge ? "Bridge running" : "Start Bluetooth bridge";
-        _bridgeButton.Enabled = !bridge;
+        _bridgeButton.ForeColor = bridge ? Good : Color.White;
+        _bridgeButton.FlatAppearance.BorderColor = bridge
+            ? Color.FromArgb(62, 96, 72)
+            : Border;
+        _bridgeButton.Cursor = bridge ? Cursors.Default : Cursors.Hand;
 
         (string name, _) = PatternEngine.Patterns[
             _engine.Running ? _engine.CurrentPattern : _selected];
@@ -344,6 +388,12 @@ public sealed class MainForm : Form
 
     private void StartBridge()
     {
+        if (BridgeLauncher.IsRunning())
+        {
+            RefreshStatus();
+            return;
+        }
+
         if (!BridgeLauncher.Start(out string error))
         {
             MessageBox.Show(this, error, "Plant Pulse",

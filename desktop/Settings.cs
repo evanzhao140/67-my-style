@@ -18,6 +18,17 @@ public sealed class Settings
     public int OsuFlow { get; set; } = 50;
     public bool OsuSwell { get; set; } = true;
 
+    // Drawn pattern (16 sixteenth-note columns per bar).
+    private static readonly int[] DefaultSketch =
+    {
+        100, 70, 85, 70, 95, 75, 85, 75,
+        100, 70, 90, 70, 95, 80, 88, 80,
+    };
+
+    public int[] SketchSteps { get; set; } = (int[])DefaultSketch.Clone();
+    public int SketchBpm { get; set; } = 120;
+    public bool SketchSmooth { get; set; }
+
     public static string Dir => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "PlantPulse");
 
@@ -48,6 +59,8 @@ public sealed class Settings
                         : settings.OsuAccentEvery <= 8 ? 8
                         : 16;
                     settings.OsuFlow = Math.Clamp(settings.OsuFlow, 0, 90);
+                    settings.SketchSteps = NormalizeSketch(settings.SketchSteps);
+                    settings.SketchBpm = Math.Clamp(settings.SketchBpm, 40, 180);
                     return settings;
                 }
             }
@@ -57,6 +70,17 @@ public sealed class Settings
             Log.Line("settings: could not read (" + ex.Message + ")");
         }
         return new Settings();
+    }
+
+    private static int[] NormalizeSketch(int[] steps)
+    {
+        int[] normalized = new int[16];
+        int[] source = steps ?? DefaultSketch;
+        for (int i = 0; i < normalized.Length; i++)
+        {
+            normalized[i] = i < source.Length ? Math.Clamp(source[i], 0, 100) : 0;
+        }
+        return normalized;
     }
 
     public void Save()

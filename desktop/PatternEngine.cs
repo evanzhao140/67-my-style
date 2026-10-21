@@ -17,6 +17,7 @@ public sealed class PatternEngine : IDisposable
         ("Rain", "scattered soft droplets"),
         ("Purr", "continuous motor wobble"),
         ("Riser", "swell, silence, then a drop"),
+        ("Overdrive", "constant drive with high peaks"),
     };
 
     private readonly HapticServer _server;
@@ -65,6 +66,7 @@ public sealed class PatternEngine : IDisposable
 
         _server.ConstantEnd("purr");
         _server.ConstantEnd("riser");
+        _server.ConstantEnd("overdrive");
 
         if (thread != null && thread.IsAlive && thread != Thread.CurrentThread)
         {
@@ -89,6 +91,7 @@ public sealed class PatternEngine : IDisposable
                     case 3: Rain(); break;
                     case 4: Purr(); break;
                     case 5: Riser(); break;
+                    case 6: Overdrive(); break;
                     default: return;
                 }
             }
@@ -101,6 +104,7 @@ public sealed class PatternEngine : IDisposable
 
         _server.ConstantEnd("purr");
         _server.ConstantEnd("riser");
+        _server.ConstantEnd("overdrive");
     }
 
     // MARK: - Textures
@@ -242,6 +246,51 @@ public sealed class PatternEngine : IDisposable
         finally
         {
             _server.ConstantEnd("riser");
+        }
+    }
+
+    /// <summary>
+    /// High-energy texture: a continuous bed at ~70% keeps the phone high, while
+    /// every step lands between 82% and 100% — no quiet filler hits.
+    /// </summary>
+    private void Overdrive()
+    {
+        try
+        {
+            while (_running && _pattern == 6)
+            {
+                int level = _intensity;
+                int bed = Math.Clamp((int)Math.Round(level * 0.70), 10, 100);
+                _server.Constant("overdrive", bed);
+
+                double step = 60.0 / _bpm / 4.0;
+                for (int i = 0; i < 16 && _running && _pattern == 6; i++)
+                {
+                    if (i % 4 == 0)
+                    {
+                        _server.Burst("over_kick", level, 180, 2);
+                    }
+                    else if (i % 4 == 2)
+                    {
+                        _server.Burst("over_bass", Math.Max(10, (int)(level * 0.88)), 120, 1);
+                    }
+                    else
+                    {
+                        _server.Burst("over_hat", Math.Max(8, (int)(level * 0.82)), 55, 1);
+                    }
+
+                    if (i == 4 || i == 12)
+                    {
+                        _server.Burst("over_snare", Math.Max(10, (int)(level * 0.95)), 160, 2);
+                    }
+
+                    if (!WaitSeconds(step)) return;
+                }
+            }
+        }
+        finally
+        {
+            _server.ConstantEnd("overdrive");
         }
     }
 

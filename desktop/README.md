@@ -71,10 +71,28 @@ Notes:
 | **Rain** | scattered soft droplets, never the same twice |
 | **Purr** | continuous motor rumble with a 6 Hz wobble |
 | **Riser** | six-second swell, a beat of silence, then the drop |
+| **Overdrive** | a 70% continuous drive with kick, bass, hats and snare all in the 82–100% range |
 
-**Tempo** (40–180 BPM) drives Heartbeat, Groove and Warp. **Intensity**
+**Tempo** (40–180 BPM) drives Heartbeat, Groove, Warp and Overdrive. **Intensity**
 (10–100%) scales everything. Click a texture again (or the big Play/Stop bar)
 to stop it.
+
+## Draw custom
+
+The last tile in the pattern grid opens a small sketch editor. Drag across the
+16 columns to draw one bar of haptics — the height of each column is its
+strength. The editor loops the bar at its own **Speed** setting (40–180 BPM):
+
+- **Taps** (default): every column fires one burst; columns 80% and above use a
+  longer double pulse. Empty columns are rests.
+- **Smooth continuous**: the drawn shape is streamed as a continuous bed instead
+  of separate taps, so swells and rumbles follow the curve.
+- **High energy** fills the bar with 85–100% hits; **Clear** erases it.
+
+The drawing is saved in `settings.json` (`sketchSteps`, `sketchBpm`,
+`sketchSmooth`), so it is still there next launch. Opening the editor stops a
+running texture and closes an open osu! sync panel, so only one source drives
+the phone at a time. Click **Close** to return to the main screen.
 
 ## Notes
 
@@ -86,3 +104,6 @@ to stop it.
 - The bridge is a separate, already-built app in `..\bridge\publish`. If it is
   missing, build it once with `cd bridge && dotnet publish -c Release -o publish`.
 - Build Plant Pulse with `dotnet publish -c Release -o publish`.
+- Dev smoke tests: `--test` plays every texture (including Overdrive at 100%),
+  `--sketch-test` streams the drawing as taps then smooth, and
+  `--sketch-ui-test` opens the sketch editor for 12 seconds.
