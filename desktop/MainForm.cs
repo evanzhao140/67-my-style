@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Drawing;
 using System.Windows.Forms;
 
@@ -34,6 +33,7 @@ public sealed class MainForm : Form
     private readonly System.Windows.Forms.Timer _timer = new();
 
     private int _selected;
+    private OsuSyncForm _osuForm;
 
     public MainForm()
     {
@@ -74,8 +74,27 @@ public sealed class MainForm : Form
 
     private void BuildHeader()
     {
-        AddLabel("Plant Pulse", 24, 14, 400, 34, 20f, Color.White, FontStyle.Bold);
+        AddLabel("Plant Pulse", 24, 14, 360, 34, 20f, Color.White, FontStyle.Bold);
         AddLabel("haptic pattern transmitter", 26, 50, 400, 20, 8.8f, Dim);
+
+        Button osuButton = new()
+        {
+            Text = "osu! sync",
+            Left = 408,
+            Top = 16,
+            Width = 120,
+            Height = 30,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Panel,
+            ForeColor = Color.White,
+            Font = new Font("Segoe UI", 9f),
+            Cursor = Cursors.Hand,
+        };
+        osuButton.FlatAppearance.BorderColor = Border;
+        osuButton.FlatAppearance.BorderSize = 1;
+        osuButton.FlatAppearance.MouseOverBackColor = Color.FromArgb(36, 36, 48);
+        osuButton.Click += (_, _) => OpenOsuSync();
+        Controls.Add(osuButton);
     }
 
     private void BuildStatusRow()
@@ -312,7 +331,7 @@ public sealed class MainForm : Form
             _phoneStatus.ForeColor = Warn;
         }
 
-        bool bridge = BridgeRunning();
+        bool bridge = BridgeLauncher.IsRunning();
         _bridgeStatus.Text = bridge ? "Bluetooth bridge running" : "Bluetooth bridge off";
         _bridgeStatus.ForeColor = bridge ? Good : Dim;
         _bridgeButton.Text = bridge ? "Bridge running" : "Start Bluetooth bridge";
@@ -323,69 +342,37 @@ public sealed class MainForm : Form
         _playButton.Text = _engine.Running ? $"■   Stop   {name}" : $"▶   Play   {name}";
     }
 
-    private static bool BridgeRunning()
-    {
-        try
-        {
-            return Process.GetProcessesByName("PlantBridge").Length > 0;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
     private void StartBridge()
     {
-        if (BridgeRunning()) return;
-
-        string path = FindBridge();
-        if (path == null)
+        if (!BridgeLauncher.Start(out string error))
         {
-            MessageBox.Show(this,
-                "PlantBridge.exe was not found.\n\nBuild it once with:\n" +
-                "cd bridge\ndotnet publish -c Release -o publish",
-                "Plant Pulse", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(this, error, "Plant Pulse",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        RefreshStatus();
+    }
+
+    private void OpenOsuSync()
+    {
+        if (_osuForm != null && !_osuForm.IsDisposed)
+        {
+            _osuForm.Activate();
             return;
         }
 
-        try
-        {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = path,
-                WorkingDirectory = Path.GetDirectoryName(path),
-                UseShellExecute = true,
-            });
-            Log.Line("bridge: started " + path);
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, "Could not start Plant Bridge:\n" + ex.Message,
-                "Plant Pulse", MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
-    }
+        if (_engine.Running) StopPlayback();
 
-    /// <summary>Finds the bridge next to the repo (works from bin/ and publish/).</summary>
-    private static string FindBridge()
-    {
-        DirectoryInfo dir = new(AppContext.BaseDirectory);
-        for (int i = 0; i < 6 && dir != null; i++)
-        {
-            string candidate = Path.Combine(dir.FullName, "bridge", "publish", "PlantBridge.exe");
-            if (File.Exists(candidate)) return candidate;
-            dir = dir.Parent;
-        }
-
-        string home = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            "MCVibe", "bridge", "publish", "PlantBridge.exe");
-        return File.Exists(home) ? home : null;
+        _osuForm = new OsuSyncForm(_server, _settings);
+        _osuForm.FormClosed += (_, _) => _osuForm = null;
+        _osuForm.Show(this);
     }
 
     private void OnClosing(object sender, FormClosingEventArgs e)
     {
         _timer.Stop();
+
+        if (_osuForm != null && !_osuForm.IsDisposed) _osuForm.Close();
+
         _engine.Stop();
         _server.Clear();
         _server.Dispose();

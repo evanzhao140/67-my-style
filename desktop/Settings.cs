@@ -9,6 +9,13 @@ public sealed class Settings
     public int Bpm { get; set; } = 90;
     public int Intensity { get; set; } = 75;
 
+    // osu! sync
+    public bool OsuSyncEnabled { get; set; } = true;
+    public int OsuIntensity { get; set; } = 55;
+    public int OsuAccentEvery { get; set; } = 8;
+    public bool OsuMissBuzz { get; set; } = true;
+    public bool OsuStartPing { get; set; } = true;
+
     public static string Dir => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "PlantPulse");
 
@@ -34,6 +41,10 @@ public sealed class Settings
                     settings.Bpm = Math.Clamp(settings.Bpm, 40, 180);
                     settings.Intensity = Math.Clamp(settings.Intensity, 10, 100);
                     settings.Pattern = Math.Clamp(settings.Pattern, 0, PatternEngine.Patterns.Length - 1);
+                    settings.OsuIntensity = Math.Clamp(settings.OsuIntensity, 10, 100);
+                    settings.OsuAccentEvery = settings.OsuAccentEvery <= 4 ? 4
+                        : settings.OsuAccentEvery <= 8 ? 8
+                        : 16;
                     return settings;
                 }
             }

@@ -22,6 +22,39 @@ needs no Wi-Fi network access.
 No bridge and no Bluetooth needed; both sides just need to be on the same
 network. The app also accepts a typed IP.
 
+## osu! sync (lazer)
+
+Plant Pulse can turn **osu!lazer** gameplay into haptics. The game stays
+untouched: lazer has no third-party mod API, so Plant Pulse reads the live play
+state through **tosu** (the standard open-source memory reader) over its local
+websocket and streams hits to the phone.
+
+### One-time setup
+
+1. Install [tosu](https://tosu.app) — portable `tosu.exe`, or
+   `winget install tosuapp.tosu`. A portable copy is already bundled in
+   `desktop\publish\tosu\tosu.exe` on this PC; **Start tosu** launches it.
+2. Start tosu before you play; it listens on `127.0.0.1:24050`.
+3. In Plant Pulse, click **osu! sync** (top right). Sync is on by default.
+4. Connect the phone as usual — Wi-Fi, or Bluetooth via **Start bridge**.
+5. Play lazer.
+
+Every hit is a short tick, every 4th/8th/16th hit is accented, combo adds a
+little energy, and misses get a low thud. **Hit intensity**, **Accent**,
+**Miss buzz** and **Start ping** are adjustable, and the current beatmap,
+combo, hits and misses are shown live.
+
+Notes:
+
+- tosu's precise feed polls every 10 ms by default; that is what keeps the taps
+  tight. If you edited `PRECISE_DATA_POLL_RATE`, keep it at 10 ms or lower.
+- osu!catch has no hit-error stream, so it automatically falls back to the
+  score counters (still synced, just slightly coarser).
+- Nothing is injected or patched in lazer, and no phone-app change is needed.
+- Use the osu! sync window while playing; the main pattern screen and osu! sync
+  share the same phone link, so don't run both at once.
+- Close Minecraft while using Plant Pulse (port 25666).
+
 ## Textures
 
 | Texture | What it does |

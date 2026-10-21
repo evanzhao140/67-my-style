@@ -20,6 +20,18 @@ internal static class Program
             return;
         }
 
+        if (args.Contains("--osu-test"))
+        {
+            RunOsuTest();
+            return;
+        }
+
+        if (args.Contains("--osu-ui-test"))
+        {
+            RunOsuUiTest();
+            return;
+        }
+
         HideConsole();
 
         using Mutex mutex = new(true, "PlantPulse.Transmitter", out bool isFirst);
@@ -75,5 +87,54 @@ internal static class Program
         server.Clear();
         Thread.Sleep(400);
         Log.Line("selftest: done");
+    }
+
+    /// <summary>
+    /// Headless osu! sync test. Expects a mock tosu server on 24051 that speaks
+    /// the v2 / v2-precise websocket payloads.
+    /// </summary>
+    private static void RunOsuTest()
+    {
+        Log.Line("osutest: starting");
+        using HapticServer server = new();
+        server.Start();
+
+        using OsuSyncEngine engine = new(server, 24051);
+        engine.SetOptions(70, 4, true, true);
+        engine.Enabled = true;
+
+        Thread.Sleep(20000);
+        engine.Enabled = false;
+        server.Clear();
+        Thread.Sleep(300);
+
+        Log.Line($"osutest: done state={engine.StateName} beatmap={engine.BeatmapLabel} " +
+                 $"combo={engine.Combo} hits={engine.TotalHits} misses={engine.Misses} " +
+                 $"event={engine.LastEvent}");
+    }
+
+    /// <summary>Opens the osu! sync window for three seconds to smoke-test its layout.</summary>
+    private static void RunOsuUiTest()
+    {
+        Application.SetHighDpiMode(HighDpiMode.SystemAware);
+        Application.EnableVisualStyles();
+        Application.SetCompatibleTextRenderingDefault(false);
+
+        using HapticServer server = new();
+        server.Start();
+
+        Settings settings = Settings.Load();
+        using OsuSyncForm form = new(server, settings);
+        using System.Windows.Forms.Timer timer = new() { Interval = 3000 };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            form.Close();
+        };
+        timer.Start();
+
+        Application.Run(form);
+        Log.Line("osu-ui-test: window opened and closed cleanly");
+        server.Clear();
     }
 }
