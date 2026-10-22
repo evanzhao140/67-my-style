@@ -22,6 +22,32 @@ needs no Wi-Fi network access.
 No bridge and no Bluetooth needed; both sides just need to be on the same
 network. The app also accepts a typed IP.
 
+## Music sync
+
+Plant Pulse can follow whatever is playing on the PC — Spotify, a browser,
+YouTube, a game, anything routed to the default Windows output. Click
+**music sync** in the header, then **Start music sync**.
+
+It captures the system output directly with Windows WASAPI loopback, using a
+20 ms buffer where the driver allows it. There is no tosu, websocket or game
+hook in this path, so it starts reacting immediately.
+
+- The **bed** (`music_flow`) is continuous and never below **50%** while
+  listening. **Volume swell** lets louder passages lift it further (up to 90%).
+- **Tempo** is detected from bass and transients. Once locked, `music_beat`
+  peaks follow the beat and every fourth beat is a slightly stronger
+  `music_accent`. **Beat strength** sets the peak level.
+- **Timing lead** sends beats early to compensate for Bluetooth/phone latency
+  (default 40 ms). Use 0 ms for Wi-Fi if the beats feel early.
+- If no beat can be locked, transients still produce immediate peaks and the
+  bed stays on at the 50% floor. If system audio stops, the bed settles back
+  to 50% and the beat grid idles until sound returns.
+- The panel remembers whether it was listening and resumes when reopened.
+- Opening music sync stops the main texture and closes osu! sync. Starting a
+  texture, opening **Draw custom**, or opening osu! sync closes music sync, so
+  only one source drives the phone.
+- The phone app is unchanged; on Bluetooth, start **Plant Bridge** as usual.
+
 ## osu! sync (lazer)
 
 Plant Pulse can turn **osu!lazer** gameplay into haptics. The game stays
@@ -105,5 +131,9 @@ the phone at a time. Click **Close** to return to the main screen.
   missing, build it once with `cd bridge && dotnet publish -c Release -o publish`.
 - Build Plant Pulse with `dotnet publish -c Release -o publish`.
 - Dev smoke tests: `--test` plays every texture (including Overdrive at 100%),
-  `--sketch-test` streams the drawing as taps then smooth, and
-  `--sketch-ui-test` opens the sketch editor for 12 seconds.
+  `--sketch-test` streams the drawing as taps then smooth,
+  `--sketch-ui-test` opens the sketch editor for 12 seconds,
+  `--music-test` runs the tempo/volume analyzer on synthetic audio (no device
+  needed), `--music-device-test` opens a real loopback capture for 9 seconds
+  (optionally pass a duration in seconds), and `--music-ui-test` opens the
+  music panel.

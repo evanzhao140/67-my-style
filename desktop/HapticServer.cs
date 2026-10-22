@@ -100,7 +100,8 @@ public sealed class HapticServer : IDisposable
         if (id is not ("heart_tick" or "heart_dub" or "rain_drop" or "warp_tick"
             or "groove_hat" or "groove_tick" or "osu_hit_a" or "osu_hit_b"
             or "osu_accent" or "osu_miss" or "over_kick" or "over_bass"
-            or "over_hat" or "over_snare" or "sketch_tap" or "sketch_accent"))
+            or "over_hat" or "over_snare" or "sketch_tap" or "sketch_accent"
+            or "music_beat" or "music_accent"))
         {
             Log.Line($"burst {id} {effective}%");
         }

@@ -34,6 +34,7 @@ public sealed class MainForm : Form
 
     private int _selected;
     private OsuSyncForm _osuForm;
+    private MusicSyncForm _musicForm;
     private bool _sketchOpen;
 
     public MainForm()
@@ -75,8 +76,27 @@ public sealed class MainForm : Form
 
     private void BuildHeader()
     {
-        AddLabel("Plant Pulse", 24, 14, 360, 34, 20f, Color.White, FontStyle.Bold);
-        AddLabel("haptic pattern transmitter", 26, 50, 400, 20, 8.8f, Dim);
+        AddLabel("Plant Pulse", 24, 14, 260, 34, 20f, Color.White, FontStyle.Bold);
+        AddLabel("haptic pattern transmitter", 26, 50, 250, 20, 8.8f, Dim);
+
+        Button musicButton = new()
+        {
+            Text = "music sync",
+            Left = 294,
+            Top = 16,
+            Width = 104,
+            Height = 30,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Panel,
+            ForeColor = Color.White,
+            Font = new Font("Segoe UI", 9f),
+            Cursor = Cursors.Hand,
+        };
+        musicButton.FlatAppearance.BorderColor = Border;
+        musicButton.FlatAppearance.BorderSize = 1;
+        musicButton.FlatAppearance.MouseOverBackColor = Color.FromArgb(36, 36, 48);
+        musicButton.Click += (_, _) => OpenMusicSync();
+        Controls.Add(musicButton);
 
         Button osuButton = new()
         {
@@ -304,6 +324,7 @@ public sealed class MainForm : Form
 
     private void StartSelected()
     {
+        CloseMusicSync();
         _engine.Start(_selected, _bpm.Value, _intensity.Value);
         StylePatternButtons();
         RefreshStatus();
@@ -338,6 +359,7 @@ public sealed class MainForm : Form
     private void OpenSketch()
     {
         if (_sketchOpen) return;
+        CloseMusicSync();
         if (_osuForm != null && !_osuForm.IsDisposed) _osuForm.Close();
         if (_engine.Running) StopPlayback();
 
@@ -410,6 +432,7 @@ public sealed class MainForm : Form
             return;
         }
 
+        CloseMusicSync();
         if (_engine.Running) StopPlayback();
 
         _osuForm = new OsuSyncForm(_server, _settings);
@@ -417,10 +440,33 @@ public sealed class MainForm : Form
         _osuForm.Show(this);
     }
 
+    private void OpenMusicSync()
+    {
+        if (_musicForm != null && !_musicForm.IsDisposed)
+        {
+            _musicForm.Activate();
+            return;
+        }
+
+        if (_osuForm != null && !_osuForm.IsDisposed) _osuForm.Close();
+        if (_engine.Running) StopPlayback();
+
+        _musicForm = new MusicSyncForm(_server, _settings);
+        _musicForm.FormClosed += (_, _) => _musicForm = null;
+        _musicForm.Show(this);
+    }
+
+    private void CloseMusicSync()
+    {
+        if (_musicForm != null && !_musicForm.IsDisposed) _musicForm.Close();
+        _musicForm = null;
+    }
+
     private void OnClosing(object sender, FormClosingEventArgs e)
     {
         _timer.Stop();
 
+        CloseMusicSync();
         if (_osuForm != null && !_osuForm.IsDisposed) _osuForm.Close();
 
         _engine.Stop();

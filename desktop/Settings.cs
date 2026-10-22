@@ -18,6 +18,12 @@ public sealed class Settings
     public int OsuFlow { get; set; } = 50;
     public bool OsuSwell { get; set; } = true;
 
+    // Music sync (direct WASAPI loopback).
+    public bool MusicEnabled { get; set; }
+    public int MusicSwell { get; set; } = 30;
+    public int MusicPunch { get; set; } = 84;
+    public int MusicLead { get; set; } = 40;
+
     // Drawn pattern (16 sixteenth-note columns per bar).
     private static readonly int[] DefaultSketch =
     {
@@ -59,6 +65,9 @@ public sealed class Settings
                         : settings.OsuAccentEvery <= 8 ? 8
                         : 16;
                     settings.OsuFlow = Math.Clamp(settings.OsuFlow, 0, 90);
+                    settings.MusicSwell = Math.Clamp(settings.MusicSwell, 0, 40);
+                    settings.MusicPunch = Math.Clamp(settings.MusicPunch, 55, 100);
+                    settings.MusicLead = Math.Clamp(settings.MusicLead, 0, 200);
                     settings.SketchSteps = NormalizeSketch(settings.SketchSteps);
                     settings.SketchBpm = Math.Clamp(settings.SketchBpm, 40, 180);
                     return settings;
